@@ -25,8 +25,13 @@
 #
 ###############################################################################
 
-
-
+## Die folgenden Modelle sind identisch. Man kann sich das günstigste Modell auswählen.
+##
+## Name                	Preis      	Vertrieb über
+## -----------------------------------------------
+## Xavax Hama          	40 Euro    	Media Markt
+## Sygonix HT100 BT    	20 Euro    	Conrad
+## Comet Blue          	20 Euro    	Real / Bauhaus
 
         
         
@@ -407,21 +412,21 @@ sub CometBlueBTLE_CreateParamGatttool($@) {
         
         readingsSingleUpdate($hash,"state","pairing thermostat with pin: AttrVal($name,'','000000')",1);
     
-        Log3 $name, 4, "CometBlueBTLE ($name) - Read CometBlueBTLE_ExecGatttool_Run $name|$mac|$mod|$handle";
+        Log3 $name, 3, "CometBlueBTLE ($name) - Read CometBlueBTLE_ExecGatttool_Run $name|$mac|$mod|$handle";
 
     } elsif( $mod eq 'read' ) {
         $hash->{helper}{RUNNING_PID} = BlockingCall("CometBlueBTLE_ExecGatttool_Run", $name."|".$mac."|".$mod."|".$handle, "CometBlueBTLE_ExecGatttool_Done", 60, "CometBlueBTLE_ExecGatttool_Aborted", $hash) unless( exists($hash->{helper}{RUNNING_PID}) );
         
         readingsSingleUpdate($hash,"state","read sensor data",1);
     
-        Log3 $name, 4, "CometBlueBTLE ($name) - Read CometBlueBTLE_ExecGatttool_Run $name|$mac|$mod|$handle";
+        Log3 $name, 3, "CometBlueBTLE ($name) - Read CometBlueBTLE_ExecGatttool_Run $name|$mac|$mod|$handle";
 
     } elsif( $mod eq 'write' ) {
         $hash->{helper}{RUNNING_PID} = BlockingCall("CometBlueBTLE_ExecGatttool_Run", $name."|".$mac."|".$mod."|".$handle."|".$value, "CometBlueBTLE_ExecGatttool_Done", 60, "CometBlueBTLE_ExecGatttool_Aborted", $hash) unless( exists($hash->{helper}{RUNNING_PID}) );
         
         readingsSingleUpdate($hash,"state","write sensor data",1);
     
-        Log3 $name, 4, "CometBlueBTLE ($name) - Write CometBlueBTLE_ExecGatttool_Run $name|$mac|$mod|$handle|$value";
+        Log3 $name, 3, "CometBlueBTLE ($name) - Write CometBlueBTLE_ExecGatttool_Run $name|$mac|$mod|$handle|$value";
     }
 }
 
@@ -455,7 +460,7 @@ sub CometBlueBTLE_ExecGatttool_Run($) {
             $grepGatttool = qx(ssh $sshHost 'ps ax| grep -E "gatttool -i $hci -b $mac" | grep -v grep') if($sshHost ne 'none');
 
             if(not $grepGatttool =~ /^\s*$/) {
-                Log3 $name, 5, "CometBlueBTLE ($name) - ExecGatttool_Run: another gatttool process is running. waiting...";
+                Log3 $name, 3, "CometBlueBTLE ($name) - ExecGatttool_Run: another gatttool process is running. waiting...";
                 sleep(1);
             } else {
                 $wait = 0;
@@ -474,9 +479,9 @@ sub CometBlueBTLE_ExecGatttool_Run($) {
         $loop = 0;
         do {
             
-            Log3 $name, 5, "CometBlueBTLE ($name) - ExecGatttool_Run: call gatttool with command $cmd and loop $loop";
+            Log3 $name, 3, "CometBlueBTLE ($name) - ExecGatttool_Run: call gatttool with command $cmd and loop $loop";
             @gtResult = split(": ",qx($cmd));
-            Log3 $name, 5, "CometBlueBTLE ($name) - ExecGatttool_Run: gatttool loop result ".join(",", @gtResult);
+            Log3 $name, 3, "CometBlueBTLE ($name) - ExecGatttool_Run: gatttool loop result ".join(",", @gtResult);
             $loop++;
             
             $gtResult[0] = 'connect error'
@@ -484,7 +489,7 @@ sub CometBlueBTLE_ExecGatttool_Run($) {
             
         } while( $loop < 5 and $gtResult[0] eq 'connect error' );
         
-        Log3 $name, 4, "CometBlueBTLE ($name) - ExecGatttool_Run: gatttool result ".join(",", @gtResult);
+        Log3 $name, 3, "CometBlueBTLE ($name) - ExecGatttool_Run: gatttool result ".join(",", @gtResult);
         
         $handle = '0x35' if($sshHost ne 'none' and $gattCmd eq 'write' and AttrVal($name,'model','none') eq 'flowerSens');
         $gattCmd = 'read' if($sshHost ne 'none' and $gattCmd eq 'write' and AttrVal($name,'model','none') eq 'flowerSens');
@@ -521,10 +526,10 @@ sub CometBlueBTLE_ExecGatttool_Done($) {
     
     delete($hash->{helper}{RUNNING_PID});
     
-    Log3 $name, 5, "CometBlueBTLE ($name) - ExecGatttool_Done: Helper is disabled. Stop processing" if($hash->{helper}{DISABLED});
+    Log3 $name, 3, "CometBlueBTLE ($name) - ExecGatttool_Done: Helper is disabled. Stop processing" if($hash->{helper}{DISABLED});
     return if($hash->{helper}{DISABLED});
     
-    Log3 $name, 4, "CometBlueBTLE ($name) - ExecGatttool_Done: gatttool return string: $string";
+    Log3 $name, 3, "CometBlueBTLE ($name) - ExecGatttool_Done: gatttool return string: $string";
     
     
     if( $respstate eq 'ok' and $gattCmd eq 'write' and $handle eq '0x48' and $hash->{helper}{writePin} == 1 ) {
@@ -543,7 +548,7 @@ sub CometBlueBTLE_ExecGatttool_Done($) {
 
     my $decode_json =   eval{decode_json($json_notification)};
     if($@){
-        Log3 $name, 5, "CometBlueBTLE ($name) - ExecGatttool_Done: JSON error while request: $@";
+        Log3 $name, 3, "CometBlueBTLE ($name) - ExecGatttool_Done: JSON error while request: $@";
     }
 
     
@@ -567,7 +572,7 @@ sub CometBlueBTLE_ExecGatttool_Aborted($) {
     $readings{'lastGattError'} = 'The BlockingCall Process terminated unexpectedly. Timedout';
     CometBlueBTLE_WriteReadings($hash,\%readings);
 
-    Log3 $name, 4, "CometBlueBTLE ($name) - ExecGatttool_Aborted: The BlockingCall Process terminated unexpectedly. Timedout";
+    Log3 $name, 3, "CometBlueBTLE ($name) - ExecGatttool_Aborted: The BlockingCall Process terminated unexpectedly. Timedout";
 }
 
 sub CometBlueBTLE_ProcessingNotification($@) {
@@ -578,17 +583,17 @@ sub CometBlueBTLE_ProcessingNotification($@) {
     my $readings;
     
     
-    Log3 $name, 5, "CometBlueBTLE ($name) - ProcessingNotification";
+    Log3 $name, 3, "CometBlueBTLE ($name) - ProcessingNotification";
 
     if( $handle eq $gatttChar{'battery'} ) {
         ### Flower Sens - Read Firmware and Battery Data
-        Log3 $name, 4, "CometBlueBTLE ($name) - ProcessingNotification: handle 0x38";
+        Log3 $name, 3, "CometBlueBTLE ($name) - ProcessingNotification: handle $gatttChar{'battery'}";
         
         $readings = CometBlueBTLE_HandleBattery($hash,$notification);
         
     } elsif( $handle eq $gatttChar{'payload'} ) {
         ### payload abrufen
-        Log3 $name, 4, "CometBlueBTLE ($name) - ProcessingNotification: handle $gatttChar{'payload'}";
+        Log3 $name, 3, "CometBlueBTLE ($name) - ProcessingNotification: handle $gatttChar{'payload'}";
         
         $readings = CometBlueBTLE_HandlePayload($hash,$notification);
     }
@@ -605,7 +610,7 @@ sub CometBlueBTLE_HandleBattery($$) {
     my %readings;
     
     
-    Log3 $name, 5, "CometBlueBTLE ($name) - FlowerSens Handle0x38";
+    Log3 $name, 3, "CometBlueBTLE ($name) - FlowerSens handle $gatttChar{'battery'}";
 
     $readings{'batteryLevel'}   = hex("0x".$notification);
     $readings{'battery'}        = (hex("0x".$notification) > 15?"ok":"low");
@@ -623,7 +628,7 @@ sub CometBlueBTLE_HandlePayload($$) {
     my %readings;
     
     
-    Log3 $name, 5, "CometBlueBTLE ($name) - FlowerSens Handle0x35";
+    Log3 $name, 5, "CometBlueBTLE ($name) - FlowerSens handle $gatttChar{'battery'}";
     
     my @payload  = split(" ",$notification);
 
@@ -669,7 +674,7 @@ sub CometBlueBTLE_WriteReadings($$) {
 
     CometBlueBTLE_stateRequest($hash) if( $hash->{helper}{CallBattery} == 1 );
 
-    Log3 $name, 4, "CometBlueBTLE ($name) - WriteReadings: Readings were written";
+    Log3 $name, 3, "CometBlueBTLE ($name) - WriteReadings: Readings were written";
 
 }
 
@@ -680,7 +685,7 @@ sub CometBlueBTLE_ProcessingErrors($$) {
     my $name                    = $hash->{NAME};
     my %readings;
     
-    Log3 $name, 5, "CometBlueBTLE ($name) - ProcessingErrors";
+    Log3 $name, 3, "CometBlueBTLE ($name) - ProcessingErrors";
     $readings{'lastGattError'} = $notification;
     
     CometBlueBTLE_WriteReadings($hash,\%readings);
