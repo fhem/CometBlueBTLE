@@ -49,7 +49,7 @@ use JSON;
 use Blocking;
 
 
-my $version = "0.0.3";
+my $version = "0.0.4";
 
 
 
@@ -497,7 +497,7 @@ sub CometBlueBTLE_ExecGatttool_Run($) {
         
         if($gtResult[1] =~ /^([0-9a-f]{2}(\s?))*$/) {
             return "$name|$mac|ok|$gattCmd|$handle|$json_notification";
-        } elsif($gtResult[0] eq 'Characteristic value was written successfully' and $gattCmd eq 'write') {
+        } elsif($handle eq '0x48' and $gattCmd eq 'write') {
             return "$name|$mac|ok|$gattCmd|$handle|$json_notification";
         } else {
             return "$name|$mac|error|$gattCmd|$handle|$json_notification";
@@ -638,8 +638,8 @@ sub CometBlueBTLE_HandlePayload($$) {
 
     $readings{'measured-temp'}  = hex("0x".$payload[0])/2;
     $readings{'desired-temp'}   = hex("0x".$payload[1])/2;
-    $readings{'tempMin'}        = hex("0x".$payload[2])/2;
-    $readings{'tempMax'}        = hex("0x".$payload[3])/2;
+    $readings{'tempEco'}        = hex("0x".$payload[2])/2;
+    $readings{'tempComfort'}    = hex("0x".$payload[3])/2;
     $readings{'tempOffset'}     = hex("0x".$payload[4]);
     $readings{'winOpnState'}    = hex("0x".$payload[5]);
     $readings{'winOpnPeriod'}   = hex("0x".$payload[6]);
