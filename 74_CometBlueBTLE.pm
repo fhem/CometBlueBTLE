@@ -49,7 +49,7 @@ use JSON;
 use Blocking;
 
 
-my $version = "0.0.4";
+my $version = "0.0.5";
 
 
 
@@ -544,7 +544,7 @@ sub CometBlueBTLE_ExecGatttool_Done($) {
     }
 
     
-    if( $respstate eq 'ok' and $gattCmd eq 'write' and AttrVal($name,'model','none') eq 'flowerSens' ) {
+    if( $respstate eq 'ok' ) {
         CometBlueBTLE_ProcessingNotification($hash,$gattCmd,$handle,$decode_json->{gtResult});
         
     } else {
