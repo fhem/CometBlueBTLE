@@ -49,7 +49,7 @@ use JSON;
 use Blocking;
 
 
-my $version = "0.0.1";
+my $version = "0.0.3";
 
 
 
