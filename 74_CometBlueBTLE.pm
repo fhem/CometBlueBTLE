@@ -471,10 +471,9 @@ sub CometBlueBTLE_ExecGatttool_Run($) {
         $cmd .= "gatttool -i $hci -b $mac ";
         $cmd .= "--char-read -a $handle" if($gattCmd eq 'read');
         $cmd .= "--char-write-req -a $handle -n $value" if($gattCmd eq 'write');
-        $cmd = "timeout 15 ".$cmd." --listen" if( AttrVal($name,"model","none") eq 'thermoHygroSens' and $gattCmd eq 'write' and $handle eq '0x10');
+        $cmd = "timeout 15 ".$cmd." --listen" if($gattCmd eq 'write' and $handle eq $gatttChar{'payload'});
         $cmd .= " 2>&1 /dev/null";
         $cmd .= "'" if($sshHost ne 'none');
-        $cmd = "ssh $sshHost 'gatttool -i $hci -b $mac --char-write-req -a 0x33 -n A01F && gatttool -i $hci -b $mac --char-read -a 0x35 2>&1 /dev/null'" if($sshHost ne 'none' and $gattCmd eq 'write' and AttrVal($name,"model","none") eq 'flowerSens');
         
         $loop = 0;
         do {
@@ -490,9 +489,6 @@ sub CometBlueBTLE_ExecGatttool_Run($) {
         } while( $loop < 5 and $gtResult[0] eq 'connect error' );
         
         Log3 $name, 3, "CometBlueBTLE ($name) - ExecGatttool_Run: gatttool result ".join(",", @gtResult);
-        
-        $handle = '0x35' if($sshHost ne 'none' and $gattCmd eq 'write' and AttrVal($name,'model','none') eq 'flowerSens');
-        $gattCmd = 'read' if($sshHost ne 'none' and $gattCmd eq 'write' and AttrVal($name,'model','none') eq 'flowerSens');
 
         $gtResult[1] = 'no data response'
         unless( defined($gtResult[1]) );
@@ -501,12 +497,6 @@ sub CometBlueBTLE_ExecGatttool_Run($) {
         
         if($gtResult[1] =~ /^([0-9a-f]{2}(\s?))*$/) {
             return "$name|$mac|ok|$gattCmd|$handle|$json_notification";
-        } elsif($gtResult[0] ne 'connect error' and $gattCmd eq 'write') {
-            if( $sshHost ne 'none' ) {
-                CometBlueBTLE_ExecGatttool_Run($name."|".$mac."|read|0x35");
-            } else {
-                return "$name|$mac|ok|$gattCmd|$handle|$json_notification";
-            }
         } else {
             return "$name|$mac|error|$gattCmd|$handle|$json_notification";
         }
