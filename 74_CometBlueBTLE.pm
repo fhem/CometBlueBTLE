@@ -471,7 +471,7 @@ sub CometBlueBTLE_ExecGatttool_Run($) {
         $cmd .= "gatttool -i $hci -b $mac ";
         $cmd .= "--char-read -a $handle" if($gattCmd eq 'read');
         $cmd .= "--char-write-req -a $handle -n $value" if($gattCmd eq 'write');
-        $cmd = "timeout 15 ".$cmd." --listen" if($gattCmd eq 'write' and $handle eq $gatttChar{'payload'});
+        $cmd = "timeout 15 ".$cmd." --listen" if($gattCmd eq 'write');
         $cmd .= " 2>&1 /dev/null";
         $cmd .= "'" if($sshHost ne 'none');
         
