@@ -49,7 +49,7 @@ use JSON;
 use Blocking;
 
 
-my $version = "0.0.11";
+my $version = "0.0.13";
 
 
 
@@ -674,7 +674,7 @@ sub CometBlueBTLE_HandleFirmware($$) {
     
     Log3 $name, 3, "CometBlueBTLE ($name) - FlowerSens handle $gatttChar{'firmware'}";
 
-    $readings{'firmware'}   = pack('H*'.$notification);
+    $readings{'firmware'}   = pack('H*',$notification);
 
     $hash->{helper}{CallBattery} = 0;
     return \%readings;
@@ -690,7 +690,7 @@ sub CometBlueBTLE_HandleDevicename($$) {
     
     Log3 $name, 3, "CometBlueBTLE ($name) - FlowerSens handle $gatttChar{'devicename'}";
 
-    $readings{'devicename'}   = pack('H*'.$notification);
+    $readings{'devicename'}   = pack('H*',$notification);
 
     $hash->{helper}{CallBattery} = 0;
     return \%readings;
