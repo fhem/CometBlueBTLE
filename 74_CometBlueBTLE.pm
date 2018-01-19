@@ -49,7 +49,7 @@ use JSON;
 use Blocking;
 
 
-my $version = "0.0.5";
+my $version = "0.0.11";
 
 
 
@@ -57,7 +57,8 @@ my $version = "0.0.5";
 my %gatttChar = (
         'devicename'    => '0x3',
         'battery'       => '0x3f',
-        'payload'       => '0x3d'
+        'payload'       => '0x3d',
+        'firmware'      => '0x18'
     );
 
 my %CallBatteryAge = (  '8h'    => 28800,
@@ -97,6 +98,8 @@ sub CometBlueBTLE_CreateDevicenameHEX($);
 
 sub CometBlueBTLE_HandlePayload($$);
 sub CometBlueBTLE_HandleBattery($$);
+sub CometBlueBTLE_HandleFirmware($$);
+sub CometBlueBTLE_HandleDevicename($$);
 
 
 
@@ -282,7 +285,7 @@ sub CometBlueBTLE_stateRequest($) {
     
     
     if( !IsDisabled($name) ) {
-        #if( ReadingsVal($name,'firmware','none') ne 'none' ) {
+        if( ReadingsVal($name,'firmware','none') ne 'none' ) {
 
             return CometBlueBTLE_CreateParamGatttool($hash,'read',$gatttChar{'battery'})
             if( CometBlueBTLE_CallBattery_IsUpdateTimeAgeToOld($hash,$CallBatteryAge{AttrVal($name,'BatteryFirmwareAge','24h')}) );
@@ -298,10 +301,10 @@ sub CometBlueBTLE_stateRequest($) {
             #    return;
             #}
             
-        #} else {
+        } else {
 
-        #    CometBlueBTLE_CreateParamGatttool($hash,'read',$XiaomiModels{AttrVal($name,'model','')}{firmware});
-        #}
+            CometBlueBTLE_CreateParamGatttool($hash,'read',$gatttChar{'firmware'});
+        }
 
     } else {
         readingsSingleUpdate($hash,"state","disabled",1);
@@ -340,14 +343,15 @@ sub CometBlueBTLE_Set($$@) {
     my $handle;
     my $value               = 'write';
     
-    if( $cmd eq 'devicename' ) {
-        return "usage: devicename <name>" if( @args < 1 );
+    if( $cmd eq 'desired-temp' ) {
+        return "usage: desired-temp <name>" if( @args < 1 );
 
-        #my $devicename = join( " ", @args );
-        #$mod = 'write'; $handle = $XiaomiModels{AttrVal($name,'model','')}{devicename}; $value = CometBlueBTLE_CreateDevicenameHEX(makeDeviceName($devicename));
+        #my $devicename = join( " ", @args);
+        $mod = 'write'; $handle = $gatttChar{'payload'};
+        $value =;
     
     } else {
-        my $list = "";
+        my $list = "";              #desired-temp:on,off,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30
         return "Unknown argument $cmd, choose one of $list";
     }
     
@@ -374,7 +378,7 @@ sub CometBlueBTLE_Get($$@) {
     } elsif( $cmd eq 'firmware' ) {
         return "usage: firmware" if( @args != 0 );
 
-        $mod = 'read'; $handle = 'test';
+        $mod = 'read'; $handle = $gatttChar{'firmware'};
         
     } elsif( $cmd eq 'devicename' ) {
         return "usage: devicename" if( @args != 0 );
@@ -382,7 +386,7 @@ sub CometBlueBTLE_Get($$@) {
         $mod = 'read'; $handle = $gatttChar{'devicename'};
         
     } else {
-        my $list = "temperatures:noArg";
+        my $list = "temperatures:noArg devicename:noArg firmware:noArg";
         return "Unknown argument $cmd, choose one of $list";
     }
 
@@ -588,6 +592,18 @@ sub CometBlueBTLE_ProcessingNotification($@) {
         Log3 $name, 3, "CometBlueBTLE ($name) - ProcessingNotification: handle $gatttChar{'payload'}";
         
         $readings = CometBlueBTLE_HandlePayload($hash,$notification);
+    
+    } elsif( $handle eq $gatttChar{'firmware'} ) {
+        ### firmware abrufen
+        Log3 $name, 3, "CometBlueBTLE ($name) - ProcessingNotification: handle $gatttChar{'firmware'}";
+        
+        $readings = CometBlueBTLE_HandleFirmware($hash,$notification);
+        
+    } elsif( $handle eq $gatttChar{'devicename'} ) {
+        ### firmware abrufen
+        Log3 $name, 3, "CometBlueBTLE ($name) - ProcessingNotification: handle $gatttChar{'devicename'}";
+        
+        $readings = CometBlueBTLE_HandleDevicename($hash,$notification);
     }
 
     
@@ -595,7 +611,7 @@ sub CometBlueBTLE_ProcessingNotification($@) {
 }
 
 sub CometBlueBTLE_HandleBattery($$) {
-    ### FlowerSens - Read Firmware and Battery Data
+    ### Read Battery Data
     my ($hash,$notification)    = @_;
     
     my $name                    = $hash->{NAME};
@@ -613,7 +629,7 @@ sub CometBlueBTLE_HandleBattery($$) {
 }
 
 sub CometBlueBTLE_HandlePayload($$) {
-    ### Flower Sens - Read Sensor Data
+    ### Read Payload Data
     my ($hash,$notification)    = @_;
     
     my $name                    = $hash->{NAME};
@@ -644,6 +660,38 @@ sub CometBlueBTLE_HandlePayload($$) {
     $readings{'winOpnState'}    = hex("0x".$payload[5]);
     $readings{'winOpnPeriod'}   = hex("0x".$payload[6]);
         
+    $hash->{helper}{CallBattery} = 0;
+    return \%readings;
+}
+
+sub CometBlueBTLE_HandleFirmware($$) {
+    ### Read Firmware Data
+    my ($hash,$notification)    = @_;
+    
+    my $name                    = $hash->{NAME};
+    my %readings;
+    
+    
+    Log3 $name, 3, "CometBlueBTLE ($name) - FlowerSens handle $gatttChar{'firmware'}";
+
+    $readings{'firmware'}   = pack('H*'.$notification);
+
+    $hash->{helper}{CallBattery} = 0;
+    return \%readings;
+}
+
+sub CometBlueBTLE_HandleDevicename($$) {
+    ### Read Devicename Data
+    my ($hash,$notification)    = @_;
+    
+    my $name                    = $hash->{NAME};
+    my %readings;
+    
+    
+    Log3 $name, 3, "CometBlueBTLE ($name) - FlowerSens handle $gatttChar{'devicename'}";
+
+    $readings{'devicename'}   = pack('H*'.$notification);
+
     $hash->{helper}{CallBattery} = 0;
     return \%readings;
 }
@@ -742,6 +790,21 @@ sub CometBlueBTLE_ConvertPintoHexLittleEndian($) {
 
     #my $pin     = shift;
     #my $pinHexLittleEndian;
+}
+
+sub CometBlueBTLE_CreatePayloadString($$) {
+
+    my ($setCmd,$value)   = @_;
+    
+    sprintf('%.2x',ReadingsVal($name,'measured-temp',0)*2)
+    sprintf('%.2x',$value*2)
+    sprintf('%.2x',ReadingsVal($name,'tempEco',0)*2)
+    sprintf('%.2x',ReadingsVal($name,'tempComfort',0)*2)
+    sprintf('%.2x',ReadingsVal($name,'tempOffset',0))
+    sprintf('%.2x',ReadingsVal($name,'winOpnState',0))
+    sprintf('%.2x',ReadingsVal($name,'winOpnPeriod',0))
+    
+
 }
 
 
