@@ -348,7 +348,7 @@ sub CometBlueBTLE_Set($$@) {
 
         #my $devicename = join( " ", @args);
         $mod = 'write'; $handle = $gatttChar{'payload'};
-        $value =;
+        #$value =;
     
     } else {
         my $list = "";              #desired-temp:on,off,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30
@@ -794,15 +794,15 @@ sub CometBlueBTLE_ConvertPintoHexLittleEndian($) {
 
 sub CometBlueBTLE_CreatePayloadString($$) {
 
-    my ($setCmd,$value)   = @_;
-    
-    sprintf('%.2x',ReadingsVal($name,'measured-temp',0)*2)
-    sprintf('%.2x',$value*2)
-    sprintf('%.2x',ReadingsVal($name,'tempEco',0)*2)
-    sprintf('%.2x',ReadingsVal($name,'tempComfort',0)*2)
-    sprintf('%.2x',ReadingsVal($name,'tempOffset',0))
-    sprintf('%.2x',ReadingsVal($name,'winOpnState',0))
-    sprintf('%.2x',ReadingsVal($name,'winOpnPeriod',0))
+#     my ($setCmd,$value)   = @_;
+#     
+#     sprintf('%.2x',ReadingsVal($name,'measured-temp',0)*2)
+#     sprintf('%.2x',$value*2)
+#     sprintf('%.2x',ReadingsVal($name,'tempEco',0)*2)
+#     sprintf('%.2x',ReadingsVal($name,'tempComfort',0)*2)
+#     sprintf('%.2x',ReadingsVal($name,'tempOffset',0))
+#     sprintf('%.2x',ReadingsVal($name,'winOpnState',0))
+#     sprintf('%.2x',ReadingsVal($name,'winOpnPeriod',0))
     
 
 }
