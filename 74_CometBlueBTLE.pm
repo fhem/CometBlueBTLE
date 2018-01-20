@@ -49,7 +49,7 @@ use JSON;
 use Blocking;
 
 
-my $version = "0.0.17";
+my $version = "0.1.0";
 
 
 
@@ -198,6 +198,7 @@ sub CometBlueBTLE_Attr(@) {
     if( $attrName eq "disable" ) {
         if( $cmd eq "set" and $attrVal eq "1" ) {
             RemoveInternalTimer($hash);
+            
             readingsSingleUpdate ( $hash, "state", "disabled", 1 );
             Log3 $name, 3, "CometBlueBTLE ($name) - disabled";
         }
@@ -222,10 +223,12 @@ sub CometBlueBTLE_Attr(@) {
     }
     
     elsif( $attrName eq "interval" ) {
+        RemoveInternalTimer($hash);
+        
         if( $cmd eq "set" ) {
-            if( $attrVal < 300 ) {
-                Log3 $name, 3, "CometBlueBTLE ($name) - interval too small, please use something >= 300 (sec), default is 3600 (sec)";
-                return "interval too small, please use something >= 300 (sec), default is 3600 (sec)";
+            if( $attrVal < 30 ) {
+                Log3 $name, 3, "CometBlueBTLE ($name) - interval too small, please use something >= 30 (sec), default is 300 (sec)";
+                return "interval too small, please use something >= 30 (sec), default is 300 (sec)";
             } else {
                 $hash->{INTERVAL} = $attrVal;
                 Log3 $name, 3, "CometBlueBTLE ($name) - set interval to $attrVal";
@@ -291,20 +294,11 @@ sub CometBlueBTLE_stateRequest($) {
     
     if( !IsDisabled($name) ) {
         if( ReadingsVal($name,'firmware','none') ne 'none' ) {
-
+        
             return CometBlueBTLE_CreateParamGatttool($hash,'read',$gatttChar{'battery'})
             if( CometBlueBTLE_CallBattery_IsUpdateTimeAgeToOld($hash,$CallBatteryAge{AttrVal($name,'BatteryFirmwareAge','24h')}) );
-            
-            
-            #if( $hash->{helper}{writePin} == 1 ) {
-                CometBlueBTLE_CreateParamGatttool($hash,'read',$gatttChar{'payload'});
 
-            #} else {
-            #    $readings{'lastGattError'} = 'charWrite faild';
-            #    CometBlueBTLE_WriteReadings($hash,\%readings);
-            #    $hash->{helper}{writePin} = 0;
-            #    return;
-            #}
+            CometBlueBTLE_CreateParamGatttool($hash,'read',$gatttChar{'payload'}) if( $hash->{helper}{writePin} == 0 );
             
         } else {
 
@@ -322,18 +316,10 @@ sub CometBlueBTLE_stateRequestTimer($) {
     
     my $name        = $hash->{NAME};
 
-    
-    RemoveInternalTimer($hash);
-    
-    if( $init_done and not IsDisabled($name) ) {
         
-        CometBlueBTLE_stateRequest($hash);
-        
-    } else {
-        readingsSingleUpdate ( $hash, "state", "disabled", 1 );
-    }
+    CometBlueBTLE_stateRequest($hash) if( $init_done );
     
-    InternalTimer( gettimeofday()+$hash->{INTERVAL}+int(rand(600)), "CometBlueBTLE_stateRequestTimer", $hash );
+    InternalTimer( gettimeofday()+$hash->{INTERVAL}+int(rand(30)), "CometBlueBTLE_stateRequestTimer", $hash );
     
     Log3 $name, 4, "CometBlueBTLE ($name) - stateRequestTimer: Call Request Timer";
 }
@@ -349,17 +335,21 @@ sub CometBlueBTLE_Set($$@) {
     my $value;
     
     if( $cmd eq 'desired-temp' ) {
-        return "usage: desired-temp <name>" if( @args < 1 );
-
+        return 'CometBlueBTLE: desired-temp requires <temperature> in celsius degrees as additional parameter' if(@args < 1);
+        return 'CometBlueBTLE: desired-temp supports temperatures from 6.0 - 28.0 degrees' if($args[0]<6.0 || $args[0]>28.0);
+        
         $mod = 'write'; $handle = $gatttChar{'payload'};
         $value = join( " ", @args);
     
     } else {
-        my $list = "desired-temp:on,off,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30";
+        my  $list = "desired-temp:on,off,6,6.5,7,7.5,8,8.5,9,9.5,10,10.5,11,11.5,12,12.5,13,13.5,14,14.5,15,15.5,16,
+                    16.5,17,17.5,18,18.5,19,19.5,20,20.5,21,21.5,22,22.5,23,23.5,24,24.5,25,25.5,26,26.5,27,27.5,28";
+            $list .= "";
         return "Unknown argument $cmd, choose one of $list";
     }
     
-    
+    return 'another process is running, try again later' if( $hash->{helper}{writePin} == 1 );
+
     CometBlueBTLE_CreateParamGatttool($hash,$mod,$handle,CometBlueBTLE_CreatePayloadString($hash,$cmd,$value));
     
     return undef;
@@ -375,17 +365,17 @@ sub CometBlueBTLE_Get($$@) {
 
 
     if( $cmd eq 'temperatures' ) {
-        return "usage: temperatures" if( @args != 0 );
+        return 'usage: temperatures' if( @args != 0 );
     
         CometBlueBTLE_stateRequest($hash);
         
     } elsif( $cmd eq 'firmware' ) {
-        return "usage: firmware" if( @args != 0 );
+        return 'usage: firmware' if( @args != 0 );
 
         $mod = 'read'; $handle = $gatttChar{'firmware'};
         
     } elsif( $cmd eq 'devicename' ) {
-        return "usage: devicename" if( @args != 0 );
+        return 'usage: devicename' if( @args != 0 );
 
         $mod = 'read'; $handle = $gatttChar{'devicename'};
         
@@ -394,6 +384,7 @@ sub CometBlueBTLE_Get($$@) {
         return "Unknown argument $cmd, choose one of $list";
     }
 
+    return 'another process is running, try again later' if( $hash->{helper}{writePin} == 1 );
 
     CometBlueBTLE_CreateParamGatttool($hash,$mod,$handle) if( $cmd ne 'temperatures' );
 
@@ -480,7 +471,7 @@ sub CometBlueBTLE_ExecGatttool_Run($) {
         $cmd .= "gatttool -i $hci -b $mac ";
         $cmd .= "--char-read -a $handle" if($gattCmd eq 'read');
         $cmd .= "--char-write-req -a $handle -n $value" if($gattCmd eq 'write');
-        $cmd = "timeout 15 ".$cmd." --listen" if($gattCmd eq 'write' and $handle eq $gatttChar{'payload'});
+        #$cmd = "timeout 15 ".$cmd." --listen" if($gattCmd eq 'write' and $handle eq $gatttChar{'payload'});    wird nicht benötigt aber interessant für andere Projekte
         $cmd .= " 2>&1 /dev/null";
         $cmd .= "'" if($sshHost ne 'none');
         
@@ -532,9 +523,11 @@ sub CometBlueBTLE_ExecGatttool_Done($) {
     
     Log3 $name, 3, "CometBlueBTLE ($name) - ExecGatttool_Done: gatttool return string: $string";
     
+    if( $respstate eq 'ok' and $gattCmd eq 'write' and $hash->{helper}{writePin} == 1 ) {
+        return CometBlueBTLE_CreateParamGatttool($hash,'read',$hash->{helper}{paramGatttool}{handle})
+    }
     
     if( $respstate eq 'ok' and $gattCmd eq 'write' and $handle eq '0x48' and $hash->{helper}{writePin} == 1 ) {
-        
         return CometBlueBTLE_CreateParamGatttool($hash,$hash->{helper}{paramGatttool}{mod},$hash->{helper}{paramGatttool}{handle})
         if($handle ne $gatttChar{'payload'} and $hash->{helper}{paramGatttool}{mod} eq 'read');
         
@@ -796,7 +789,7 @@ sub CometBlueBTLE_CreateDevicenameHEX($) {
     return $devicenameHex;
 }
 
-sub CometBlueBTLE_ConvertPintoHexLittleEndian($) {
+sub CometBlueBTLE_ConvertPinToHexLittleEndian($) {
 
     #my $pin     = shift;
     #my $pinHexLittleEndian;
@@ -809,7 +802,7 @@ sub CometBlueBTLE_CreatePayloadString($$$) {
 
 
     $value = 00 if($value eq 'off');
-    $value = 30 if($value eq 'on');
+    $value = 28 if($value eq 'on');
 
     return '00' . sprintf('%.2x',$value*2) . sprintf('%.2x',ReadingsVal($name,'tempEco',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempComfort',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempOffset',0)) . sprintf('%.2x',ReadingsVal($name,'winOpnSensitivity',0)) . sprintf('%.2x',ReadingsVal($name,'winOpnPeriod',0)) if( $setCmd eq 'desired-temp' );
     
