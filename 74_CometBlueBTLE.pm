@@ -32,6 +32,7 @@
 ## Xavax Hama          	40 Euro    	Media Markt
 ## Sygonix HT100 BT    	20 Euro    	Conrad
 ## Comet Blue          	20 Euro    	Real / Bauhaus
+## THERMy blue             Euro         Aldi
 
         
         
