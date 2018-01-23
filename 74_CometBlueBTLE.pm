@@ -55,7 +55,8 @@ my $version = "0.1.11";
 
 
 my %gatttChar = (
-        CometBlue       => {'devicename' => '0x3', 'battery' => '0x41', 'payload' => '0x3f', 'firmware' => '0x18', 'pin' => '0x47'},
+        CometBlue       => {'devicename' => '0x3', 'battery' => '0x41', 'payload' => '0x3f', 'firmware' => '0x18', 'pin' => '0x47', 'date' => '0x1d',
+                            'tempLists' => '0x29,0x2b,0x1f,0x21,0x23,0x25,0x27'},
         SilverCrest     => {'devicename' => '0x3', 'battery' => '0x3f', 'payload' => '0x3d', 'firmware' => '0x18', 'pin' => '0x48'}
     );
     
@@ -144,7 +145,7 @@ sub CometBlueBTLE_Define($$) {
     my @a = split( "[ \t][ \t]*", $def );
     
     return "too few parameters: define <name> CometBlueBTLE <BTMAC>" if( @a != 3 );
-    
+
 
     my $name                                = $a[0];
     my $mac                                 = $a[2];
@@ -326,7 +327,6 @@ sub CometBlueBTLE_Set($$@) {
     my ($cmd, @args)        = @aa;
     
 
-    my $mod                 = 'write';
     my $handle;
     my $value;
     
@@ -334,17 +334,47 @@ sub CometBlueBTLE_Set($$@) {
         return 'CometBlueBTLE: desired-temp requires <temperature> in celsius degrees as additional parameter' if(@args < 1);
         return 'CometBlueBTLE: desired-temp supports temperatures from 6.0 - 28.0 degrees' if($args[0]<6.0 || $args[0]>28.0);
         
-        $mod = 'write'; $handle = $gatttChar{AttrVal($name,'model','')}{'payload'};
+        $handle = $gatttChar{AttrVal($name,'model','')}{'payload'};
         $value = join( " ", @args);
         
-    } elsif( $cmd eq 'nert' ) {
+    } elsif( $cmd eq 'tempEco' ) {
+        return 'CometBlueBTLE: tempEco requires <temperature> in celsius degrees as additional parameter' if(@args < 1);
+        return 'CometBlueBTLE: tempEco supports temperatures from 6.0 - 28.0 degrees' if($args[0]<6.0 || $args[0]>28.0);
     
-        $mod = 'write'; $handle = $gatttChar{AttrVal($name,'model','')}{'noep'};
+        $handle = $gatttChar{AttrVal($name,'model','')}{'payload'};
+        $value = join( " ", @args);
+        
+    } elsif( $cmd eq 'tempComfort' ) {
+        return 'CometBlueBTLE: tempComfort requires <temperature> in celsius degrees as additional parameter' if(@args < 1);
+        return 'CometBlueBTLE: tempComfort supports temperatures from 6.0 - 28.0 degrees' if($args[0]<6.0 || $args[0]>28.0);
+    
+        $handle = $gatttChar{AttrVal($name,'model','')}{'payload'};
+        $value = join( " ", @args);
+        
+    } elsif( $cmd eq 'tempOffset' ) {
+        return 'CometBlueBTLE: tempOffset requires a additional parameter' if(@args < 1);
+    
+        $handle = $gatttChar{AttrVal($name,'model','')}{'payload'};
+        $value = join( " ", @args);
+        
+    } elsif( $cmd eq 'winOpnSensitivity' ) {
+        return 'CometBlueBTLE: winOpnSensitivity requires a additional parameter high,medium or low' if(@args < 1);
+    
+        $handle = $gatttChar{AttrVal($name,'model','')}{'payload'};
+        $value = join( " ", @args);
+        
+    } elsif( $cmd eq 'winOpnPeriod' ) {
+        return 'CometBlueBTLE: winOpnSensitivity requires a additional parameter in minutes' if(@args < 1);
+    
+        $handle = $gatttChar{AttrVal($name,'model','')}{'payload'};
         $value = join( " ", @args);
     
     } else {
         my  $list = "desired-temp:on,off,6,6.5,7,7.5,8,8.5,9,9.5,10,10.5,11,11.5,12,12.5,13,13.5,14,14.5,15,15.5,16,16.5,17,17.5,18,18.5,19,19.5,20,20.5,21,21.5,22,22.5,23,23.5,24,24.5,25,25.5,26,26.5,27,27.5,28";
-            $list .= "";
+            $list .= " tempEco:6,6.5,7,7.5,8,8.5,9,9.5,10,10.5,11,11.5,12,12.5,13,13.5,14,14.5,15,15.5,16,16.5,17,17.5,18,18.5,19,19.5,20,20.5,21,21.5,22,22.5,23,23.5,24,24.5,25,25.5,26,26.5,27,27.5,28";
+            $list .= " tempComfort:6,6.5,7,7.5,8,8.5,9,9.5,10,10.5,11,11.5,12,12.5,13,13.5,14,14.5,15,15.5,16,16.5,17,17.5,18,18.5,19,19.5,20,20.5,21,21.5,22,22.5,23,23.5,24,24.5,25,25.5,26,26.5,27,27.5,28";
+            $list .= " tempOffset:0,1,2 winOpnSensitivity:high,medium,low winOpnPeriod:slider,5,5,30";
+            
         return "Unknown argument $cmd, choose one of $list";
     }
     
@@ -379,8 +409,13 @@ sub CometBlueBTLE_Get($$@) {
 
         $handle = $gatttChar{AttrVal($name,'model','')}{'devicename'};
         
+    } elsif( $cmd eq 'tempLists' ) {
+        return 'usage: tempLists' if( @args != 0 );
+
+        $handle = $gatttChar{AttrVal($name,'model','')}{'tempLists'};
+        
     } else {
-        my $list = "temperatures:noArg devicename:noArg firmware:noArg";
+        my $list = "temperatures:noArg devicename:noArg firmware:noArg tempLists:noArg";
         return "Unknown argument $cmd, choose one of $list";
     }
 
@@ -499,7 +534,10 @@ sub CometBlueBTLE_ExecGatttool_Run($) {
     
         $json_notification = CometBlueBTLE_encodeJSON($gtResult[1]);
         
-        if($gtResult[1] =~ /^([0-9a-f]{2}(\s?))*$/) {
+        if($gtResult[0] =~ /^connect error$/) {
+            return "$name|$mac|error|$gattCmd|$handle|$json_notification";
+            
+        } elsif($gtResult[1] =~ /^([0-9a-f]{2}(\s?))*$/) {
             return "$name|$mac|ok|$gattCmd|$handle|$json_notification";
         
         } elsif($handle eq $gatttChar{AttrVal($name,'model','')}{'pin'} and $gattCmd eq 'write') {
@@ -538,7 +576,9 @@ sub CometBlueBTLE_ExecGatttool_Done($) {
     Log3 $name, 3, "CometBlueBTLE ($name) - ExecGatttool_Done: gatttool return string: $string";
     
     if( $respstate eq 'ok' and $gattCmd eq 'write' and $handle ne $gatttChar{AttrVal($name,'model','')}{'pin'} and $hash->{helper}{writePin} == 1 ) {
-        readingsSingleUpdate($hash, "lastChangeBy", "FHEM", 1);
+        readingsBeginUpdate($hash);
+        readingsBulkUpdateIfChanged($hash, "lastChangeBy", "FHEM");
+        readingsEndUpdate($hash,1);
         return CometBlueBTLE_CreateParamGatttool($hash,'read',$hash->{helper}{paramGatttool}{handle})
     }
     
@@ -618,8 +658,8 @@ sub CometBlueBTLE_ProcessingNotification($@) {
         
         $readings = CometBlueBTLE_HandleDevicename($hash,$notification);
     }
-    
-    
+
+
     CometBlueBTLE_WriteReadings($hash,$readings);
 }
 
@@ -723,7 +763,7 @@ sub CometBlueBTLE_WriteReadings($$) {
     readingsBeginUpdate($hash);
     while( my ($r,$v) = each %{$readings} ) {
         Log3 $name, 5, "CometBlueBTLE ($name) - WriteReadings: Reading $r, value $v altes value " . ReadingsVal($name, $r,"");
-        readingsBulkUpdateIfChanged($hash, "lastChangeBy", "Thermostat") if( ReadingsVal($name, $r,"") ne $v and $r ne 'measured-temp' );
+        readingsBulkUpdateIfChanged($hash, "lastChangeBy", "Thermostat") if( ReadingsVal($name, $r,"") ne $v and $r ne 'measured-temp' and ReadingsAge($name,'lastChangeBy", "Thermostat',300) < 30 );
         readingsBulkUpdateIfChanged($hash,$r,$v) if( $r ne 'lastGattError' );
         readingsBulkUpdate($hash,$r,$v) if( $r eq 'lastGattError' );
     }
