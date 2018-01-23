@@ -49,22 +49,17 @@ use JSON;
 use Blocking;
 
 
-my $version = "0.1.0";
+my $version = "0.1.7";
 
 
 
 
 my %gatttChar = (
-        'devicename'    => '0x3',
-        'battery'       => '0x3f',
-        'payload'       => '0x3d',
-        'firmware'      => '0x18'
+        CometBlue   => {'devicename' => '0x3', 'battery' => '0x41', 'payload' => '0x3f', 'firmware' => '0x18', 'pin' => '0x47'}
     );
     
-my %winOpnSensitivity = (
-        12  => 'low',
-        8   => 'medium',
-        4   => 'high'
+my %winOpnSensitivity = ( 
+        Sensitivity => {'12' => 'low' ,'8' => 'medium' ,'4' => 'high' ,'low' => '12' ,'medium' => '8' ,'high' => '4'}
     );
 
 my %CallBatteryAge = (  '8h'    => 28800,
@@ -102,6 +97,7 @@ sub CometBlueBTLE_CallBattery_Timestamp($);
 sub CometBlueBTLE_CallBattery_UpdateTimeAge($);
 sub CometBlueBTLE_CreateDevicenameHEX($);
 sub CometBlueBTLE_CreatePayloadString($$$);
+sub CometBlueBTLE_ConvertPinToHexLittleEndian($);
 
 sub CometBlueBTLE_HandlePayload($$);
 sub CometBlueBTLE_HandleBattery($$);
@@ -127,10 +123,10 @@ sub CometBlueBTLE_Initialize($) {
                             "disabledForIntervals ".
                             "hciDevice:hci0,hci1,hci2 ".
                             "batteryFirmwareAge:8h,16h,24h,32h,40h,48h ".
-                            "minFertility ".
                             "sshHost ".
                             "blockingCallLoglevel:2,3,4,5 ".
                             "pin ".
+                            "model:XavaxHama,SygonixHT100BT,CometBlue ".
                             $readingFnAttributes;
 
 
@@ -154,7 +150,7 @@ sub CometBlueBTLE_Define($$) {
     
     $hash->{BTMAC}                          = $mac;
     $hash->{VERSION}                        = $version;
-    $hash->{INTERVAL}                       = 300;
+    $hash->{INTERVAL}                       = 150;
     $hash->{helper}{writePin}               = 0;
     $hash->{helper}{CallBattery}            = 0;
     $hash->{helper}{paramGatttool}{mod};
@@ -227,8 +223,8 @@ sub CometBlueBTLE_Attr(@) {
         
         if( $cmd eq "set" ) {
             if( $attrVal < 30 ) {
-                Log3 $name, 3, "CometBlueBTLE ($name) - interval too small, please use something >= 30 (sec), default is 300 (sec)";
-                return "interval too small, please use something >= 30 (sec), default is 300 (sec)";
+                Log3 $name, 3, "CometBlueBTLE ($name) - interval too small, please use something >= 30 (sec), default is 150 (sec)";
+                return "interval too small, please use something >= 30 (sec), default is 150 (sec)";
             } else {
                 $hash->{INTERVAL} = $attrVal;
                 Log3 $name, 3, "CometBlueBTLE ($name) - set interval to $attrVal";
@@ -278,10 +274,6 @@ sub CometBlueBTLE_Notify($$) {
                                                     or grep /^ATTR.$name.model.+/,@{$events}
                                                     or grep /^ATTR.$name.interval.[0-9]+/,@{$events} ) and $init_done and $devname eq 'global' );
 
-
-    #CometBlueBTLE_CreateParamGatttool($hash,'read',$gatttChar{'devicename'}) if( $devname eq $name
-                                                                                                                #and grep /^$name.firmware.+/,@{$events} );
-
     return;
 }
 
@@ -292,17 +284,20 @@ sub CometBlueBTLE_stateRequest($) {
     my %readings;
     
     
-    if( !IsDisabled($name) ) {
+    if( AttrVal($name,'model','none') eq 'none') {
+        readingsSingleUpdate($hash,"state","set attribute model first",1);
+        
+    } elsif( !IsDisabled($name) ) {
         if( ReadingsVal($name,'firmware','none') ne 'none' ) {
         
-            return CometBlueBTLE_CreateParamGatttool($hash,'read',$gatttChar{'battery'})
+            return CometBlueBTLE_CreateParamGatttool($hash,'read',$gatttChar{AttrVal($name,'model','')}{'battery'})
             if( CometBlueBTLE_CallBattery_IsUpdateTimeAgeToOld($hash,$CallBatteryAge{AttrVal($name,'BatteryFirmwareAge','24h')}) );
 
-            CometBlueBTLE_CreateParamGatttool($hash,'read',$gatttChar{'payload'}) if( $hash->{helper}{writePin} == 0 );
+            CometBlueBTLE_CreateParamGatttool($hash,'read',$gatttChar{AttrVal($name,'model','')}{'payload'}) if( $hash->{helper}{writePin} == 0 );
             
         } else {
 
-            CometBlueBTLE_CreateParamGatttool($hash,'read',$gatttChar{'firmware'});
+            CometBlueBTLE_CreateParamGatttool($hash,'read',$gatttChar{AttrVal($name,'model','')}{'firmware'});
         }
 
     } else {
@@ -319,7 +314,7 @@ sub CometBlueBTLE_stateRequestTimer($) {
         
     CometBlueBTLE_stateRequest($hash) if( $init_done );
     
-    InternalTimer( gettimeofday()+$hash->{INTERVAL}+int(rand(30)), "CometBlueBTLE_stateRequestTimer", $hash );
+    InternalTimer( gettimeofday()+$hash->{INTERVAL}+int(rand(60)), "CometBlueBTLE_stateRequestTimer", $hash );
     
     Log3 $name, 4, "CometBlueBTLE ($name) - stateRequestTimer: Call Request Timer";
 }
@@ -338,12 +333,11 @@ sub CometBlueBTLE_Set($$@) {
         return 'CometBlueBTLE: desired-temp requires <temperature> in celsius degrees as additional parameter' if(@args < 1);
         return 'CometBlueBTLE: desired-temp supports temperatures from 6.0 - 28.0 degrees' if($args[0]<6.0 || $args[0]>28.0);
         
-        $mod = 'write'; $handle = $gatttChar{'payload'};
+        $mod = 'write'; $handle = $gatttChar{AttrVal($name,'model','')}{'payload'};
         $value = join( " ", @args);
     
     } else {
-        my  $list = "desired-temp:on,off,6,6.5,7,7.5,8,8.5,9,9.5,10,10.5,11,11.5,12,12.5,13,13.5,14,14.5,15,15.5,16,
-                    16.5,17,17.5,18,18.5,19,19.5,20,20.5,21,21.5,22,22.5,23,23.5,24,24.5,25,25.5,26,26.5,27,27.5,28";
+        my  $list = "desired-temp:on,off,6,6.5,7,7.5,8,8.5,9,9.5,10,10.5,11,11.5,12,12.5,13,13.5,14,14.5,15,15.5,16,16.5,17,17.5,18,18.5,19,19.5,20,20.5,21,21.5,22,22.5,23,23.5,24,24.5,25,25.5,26,26.5,27,27.5,28";
             $list .= "";
         return "Unknown argument $cmd, choose one of $list";
     }
@@ -366,18 +360,19 @@ sub CometBlueBTLE_Get($$@) {
 
     if( $cmd eq 'temperatures' ) {
         return 'usage: temperatures' if( @args != 0 );
-    
-        CometBlueBTLE_stateRequest($hash);
+        
+        return 'another process is running, try again later' if( $hash->{helper}{writePin} == 1 );
+        return CometBlueBTLE_stateRequest($hash);
         
     } elsif( $cmd eq 'firmware' ) {
         return 'usage: firmware' if( @args != 0 );
 
-        $mod = 'read'; $handle = $gatttChar{'firmware'};
+        $mod = 'read'; $handle = $gatttChar{AttrVal($name,'model','')}{'firmware'};
         
     } elsif( $cmd eq 'devicename' ) {
         return 'usage: devicename' if( @args != 0 );
 
-        $mod = 'read'; $handle = $gatttChar{'devicename'};
+        $mod = 'read'; $handle = $gatttChar{AttrVal($name,'model','')}{'devicename'};
         
     } else {
         my $list = "temperatures:noArg devicename:noArg firmware:noArg";
@@ -408,9 +403,9 @@ sub CometBlueBTLE_CreateParamGatttool($@) {
         $hash->{helper}{paramGatttool}{handle}  = $handle;
         $hash->{helper}{paramGatttool}{value}   = $value if( $mod eq 'write' );
         
-        $hash->{helper}{RUNNING_PID} = BlockingCall("CometBlueBTLE_ExecGatttool_Run", $name."|".$mac."|write|0x48|00000000", "CometBlueBTLE_ExecGatttool_Done", 60, "CometBlueBTLE_ExecGatttool_Aborted", $hash) unless( exists($hash->{helper}{RUNNING_PID}) );
+        $hash->{helper}{RUNNING_PID} = BlockingCall("CometBlueBTLE_ExecGatttool_Run", $name."|".$mac."|write|".$gatttChar{AttrVal($name,'model','')}{'pin'}."|".CometBlueBTLE_ConvertPinToHexLittleEndian(AttrVal($name,'pin','00000000')), "CometBlueBTLE_ExecGatttool_Done", 60, "CometBlueBTLE_ExecGatttool_Aborted", $hash) unless( exists($hash->{helper}{RUNNING_PID}) );
         
-        readingsSingleUpdate($hash,"state","pairing thermostat with pin: AttrVal($name,'','000000')",1);
+        readingsSingleUpdate($hash,"state","pairing thermostat with pin: " . CometBlueBTLE_ConvertPinToHexLittleEndian(AttrVal($name,'pin','00000000')),1);
     
         Log3 $name, 3, "CometBlueBTLE ($name) - Read CometBlueBTLE_ExecGatttool_Run $name|$mac|$mod|$handle";
 
@@ -471,7 +466,6 @@ sub CometBlueBTLE_ExecGatttool_Run($) {
         $cmd .= "gatttool -i $hci -b $mac ";
         $cmd .= "--char-read -a $handle" if($gattCmd eq 'read');
         $cmd .= "--char-write-req -a $handle -n $value" if($gattCmd eq 'write');
-        #$cmd = "timeout 15 ".$cmd." --listen" if($gattCmd eq 'write' and $handle eq $gatttChar{'payload'});    wird nicht benötigt aber interessant für andere Projekte
         $cmd .= " 2>&1 /dev/null";
         $cmd .= "'" if($sshHost ne 'none');
         
@@ -497,7 +491,9 @@ sub CometBlueBTLE_ExecGatttool_Run($) {
         
         if($gtResult[1] =~ /^([0-9a-f]{2}(\s?))*$/) {
             return "$name|$mac|ok|$gattCmd|$handle|$json_notification";
-        } elsif($handle eq '0x48' and $gattCmd eq 'write') {
+        } elsif($handle eq $gatttChar{AttrVal($name,'model','')}{'pin'} and $gattCmd eq 'write') {
+            return "$name|$mac|ok|$gattCmd|$handle|$json_notification";
+        } elsif($gtResult[1] eq 'no data response' and $gattCmd eq 'write') {
             return "$name|$mac|ok|$gattCmd|$handle|$json_notification";
         } else {
             return "$name|$mac|error|$gattCmd|$handle|$json_notification";
@@ -523,18 +519,18 @@ sub CometBlueBTLE_ExecGatttool_Done($) {
     
     Log3 $name, 3, "CometBlueBTLE ($name) - ExecGatttool_Done: gatttool return string: $string";
     
-    if( $respstate eq 'ok' and $gattCmd eq 'write' and $hash->{helper}{writePin} == 1 ) {
+    if( $respstate eq 'ok' and $gattCmd eq 'write' and $handle ne $gatttChar{AttrVal($name,'model','')}{'pin'} and $hash->{helper}{writePin} == 1 ) {
         return CometBlueBTLE_CreateParamGatttool($hash,'read',$hash->{helper}{paramGatttool}{handle})
     }
     
-    if( $respstate eq 'ok' and $gattCmd eq 'write' and $handle eq '0x48' and $hash->{helper}{writePin} == 1 ) {
+    if( $respstate eq 'ok' and $gattCmd eq 'write' and $handle eq $gatttChar{AttrVal($name,'model','')}{'pin'} and $hash->{helper}{writePin} == 1 ) {
         return CometBlueBTLE_CreateParamGatttool($hash,$hash->{helper}{paramGatttool}{mod},$hash->{helper}{paramGatttool}{handle})
-        if($handle ne $gatttChar{'payload'} and $hash->{helper}{paramGatttool}{mod} eq 'read');
+        if($handle ne $gatttChar{AttrVal($name,'model','')}{'payload'} and $hash->{helper}{paramGatttool}{mod} eq 'read');
         
         return CometBlueBTLE_CreateParamGatttool($hash,$hash->{helper}{paramGatttool}{mod},$hash->{helper}{paramGatttool}{handle},$hash->{helper}{paramGatttool}{value})
-        if($handle ne $gatttChar{'payload'} and $hash->{helper}{paramGatttool}{mod} eq 'write');
+        if($handle ne $gatttChar{AttrVal($name,'model','')}{'payload'} and $hash->{helper}{paramGatttool}{mod} eq 'write');
         
-        return CometBlueBTLE_stateRequest($hash) if($handle eq $gatttChar{'payload'} and $hash->{helper}{paramGatttool}{mod} eq 'read');
+        return CometBlueBTLE_stateRequest($hash) if($handle eq $gatttChar{AttrVal($name,'model','')}{'payload'} and $hash->{helper}{paramGatttool}{mod} eq 'read');
     }
 
 
@@ -579,27 +575,27 @@ sub CometBlueBTLE_ProcessingNotification($@) {
     
     Log3 $name, 3, "CometBlueBTLE ($name) - ProcessingNotification";
 
-    if( $handle eq $gatttChar{'battery'} ) {
+    if( $handle eq $gatttChar{AttrVal($name,'model','')}{'battery'} ) {
         ### Flower Sens - Read Firmware and Battery Data
-        Log3 $name, 3, "CometBlueBTLE ($name) - ProcessingNotification: handle $gatttChar{'battery'}";
+        Log3 $name, 3, "CometBlueBTLE ($name) - ProcessingNotification: handle $gatttChar{AttrVal($name,'model','')}{'battery'}";
         
         $readings = CometBlueBTLE_HandleBattery($hash,$notification);
         
-    } elsif( $handle eq $gatttChar{'payload'} ) {
+    } elsif( $handle eq $gatttChar{AttrVal($name,'model','')}{'payload'} ) {
         ### payload abrufen
-        Log3 $name, 3, "CometBlueBTLE ($name) - ProcessingNotification: handle $gatttChar{'payload'}";
+        Log3 $name, 3, "CometBlueBTLE ($name) - ProcessingNotification: handle $gatttChar{AttrVal($name,'model','')}{'payload'}";
         
         $readings = CometBlueBTLE_HandlePayload($hash,$notification);
     
-    } elsif( $handle eq $gatttChar{'firmware'} ) {
+    } elsif( $handle eq $gatttChar{AttrVal($name,'model','')}{'firmware'} ) {
         ### firmware abrufen
-        Log3 $name, 3, "CometBlueBTLE ($name) - ProcessingNotification: handle $gatttChar{'firmware'}";
+        Log3 $name, 3, "CometBlueBTLE ($name) - ProcessingNotification: handle $gatttChar{AttrVal($name,'model','')}{'firmware'}";
         
         $readings = CometBlueBTLE_HandleFirmware($hash,$notification);
         
-    } elsif( $handle eq $gatttChar{'devicename'} ) {
+    } elsif( $handle eq $gatttChar{AttrVal($name,'model','')}{'devicename'} ) {
         ### firmware abrufen
-        Log3 $name, 3, "CometBlueBTLE ($name) - ProcessingNotification: handle $gatttChar{'devicename'}";
+        Log3 $name, 3, "CometBlueBTLE ($name) - ProcessingNotification: handle $gatttChar{AttrVal($name,'model','')}{'devicename'}";
         
         $readings = CometBlueBTLE_HandleDevicename($hash,$notification);
     }
@@ -618,7 +614,9 @@ sub CometBlueBTLE_HandleBattery($$) {
     my %readings;
     
     
-    Log3 $name, 3, "CometBlueBTLE ($name) - FlowerSens handle $gatttChar{'battery'}";
+    Log3 $name, 3, "CometBlueBTLE ($name) - handle $gatttChar{AttrVal($name,'model','')}{'battery'}";
+    
+    chomp($notification);
 
     $readings{'batteryLevel'}   = hex("0x".$notification);
     $readings{'battery'}        = (hex("0x".$notification) > 15?"ok":"low");
@@ -636,7 +634,7 @@ sub CometBlueBTLE_HandlePayload($$) {
     my %readings;
     
     
-    Log3 $name, 5, "CometBlueBTLE ($name) - FlowerSens handle $gatttChar{'battery'}";
+    Log3 $name, 5, "CometBlueBTLE ($name) - handle $gatttChar{AttrVal($name,'model','')}{'battery'}";
     
     my @payload  = split(" ",$notification);
 
@@ -657,7 +655,7 @@ sub CometBlueBTLE_HandlePayload($$) {
     $readings{'tempEco'}            = hex("0x".$payload[2])/2;
     $readings{'tempComfort'}        = hex("0x".$payload[3])/2;
     $readings{'tempOffset'}         = hex("0x".$payload[4]);
-    $readings{'winOpnSensitivity'}  = $winOpnSensitivity{hex("0x".$payload[5])};
+    $readings{'winOpnSensitivity'}  = $winOpnSensitivity{'Sensitivity'}{hex("0x".$payload[5])};
     $readings{'winOpnPeriod'}       = hex("0x".$payload[6]);
         
     $hash->{helper}{CallBattery} = 0;
@@ -673,7 +671,7 @@ sub CometBlueBTLE_HandleFirmware($$) {
     $notification =~ s/\s+//g;
     
     
-    Log3 $name, 3, "CometBlueBTLE ($name) - FlowerSens handle $gatttChar{'firmware'}";
+    Log3 $name, 3, "CometBlueBTLE ($name) - handle $gatttChar{AttrVal($name,'model','')}{'firmware'}";
 
     $readings{'firmware'}   = pack('H*',$notification);
 
@@ -690,7 +688,7 @@ sub CometBlueBTLE_HandleDevicename($$) {
     $notification =~ s/\s+//g;
     
     
-    Log3 $name, 3, "CometBlueBTLE ($name) - FlowerSens handle $gatttChar{'devicename'}";
+    Log3 $name, 3, "CometBlueBTLE ($name) - handle $gatttChar{AttrVal($name,'model','')}{'devicename'}";
 
     $readings{'devicename'}   = pack('H*',$notification);
 
@@ -707,11 +705,12 @@ sub CometBlueBTLE_WriteReadings($$) {
 
     readingsBeginUpdate($hash);
     while( my ($r,$v) = each %{$readings} ) {
-        readingsBulkUpdateIfChanged($hash,$r,$v) if( ReadingsVal($name, $r,"") ne $v);
-        readingsBulkUpdateIfChanged($hash, "lastChangeBy", "Thermostat") if( ReadingsVal($name, $r,"") ne $v and $r ne 'measured-temp');
+        Log3 $name, 3, "CometBlueBTLE ($name) - WriteReadings: Reading $r, value $v altes value " . ReadingsVal($name, $r,"");
+        readingsBulkUpdateIfChanged($hash, "lastChangeBy", "Thermostat") if( ReadingsVal($name, $r,"") ne $v and $r ne 'measured-temp' );
+        readingsBulkUpdateIfChanged($hash,$r,$v);
     }
 
-    readingsBulkUpdateIfChanged($hash, "state", ($readings->{'lastGattError'}?'error':'active'));
+    readingsBulkUpdateIfChanged($hash, "state", ($readings->{'lastGattError'}?'error':'T: '. ReadingsVal($name,'measured-temp',-100) . ' desired: ' . ReadingsVal($name,'desired-temp',-100)));
     readingsEndUpdate($hash,1);
 
 
@@ -791,8 +790,14 @@ sub CometBlueBTLE_CreateDevicenameHEX($) {
 
 sub CometBlueBTLE_ConvertPinToHexLittleEndian($) {
 
-    #my $pin     = shift;
-    #my $pinHexLittleEndian;
+    my $pin     = shift;
+    
+    
+    return '00000000' if( $pin =~ /^0/ );
+    
+    my $hex     = unpack( 'V', pack( 'N', $pin ) );
+    $hex = sprintf('0x%2x',$hex);
+    return $hex;
 }
 
 sub CometBlueBTLE_CreatePayloadString($$$) {
@@ -803,19 +808,24 @@ sub CometBlueBTLE_CreatePayloadString($$$) {
 
     $value = 00 if($value eq 'off');
     $value = 28 if($value eq 'on');
+    
+    Log3 $name, 3, "CometBlueBTLE ($name) - winOpnSensitivity ist: " . ReadingsVal($name,'winOpnSensitivity',0);
+    Log3 $name, 3, "CometBlueBTLE ($name) - winOpnSensitivity ist: " . $winOpnSensitivity{'Sensitivity'}{ReadingsVal($name,'winOpnSensitivity',0)};
+    Log3 $name, 3, "CometBlueBTLE ($name) - winOpnSensitivity ist: " . sprintf('%.2x',$winOpnSensitivity{'Sensitivity'}{ReadingsVal($name,'winOpnSensitivity',0)});
 
-    return '00' . sprintf('%.2x',$value*2) . sprintf('%.2x',ReadingsVal($name,'tempEco',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempComfort',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempOffset',0)) . sprintf('%.2x',ReadingsVal($name,'winOpnSensitivity',0)) . sprintf('%.2x',ReadingsVal($name,'winOpnPeriod',0)) if( $setCmd eq 'desired-temp' );
+    return '00' . sprintf('%.2x',$value*2) . sprintf('%.2x',ReadingsVal($name,'tempEco',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempComfort',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempOffset',0)) . sprintf('%.2x',$winOpnSensitivity{'Sensitivity'}{ReadingsVal($name,'winOpnSensitivity',0)}) . sprintf('%.2x',ReadingsVal($name,'winOpnPeriod',0)) if( $setCmd eq 'desired-temp' );
     
-    return '00' . sprintf('%.2x',ReadingsVal($name,'desired-temp',0)*2) . sprintf('%.2x',$value*2) . sprintf('%.2x',ReadingsVal($name,'tempComfort',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempOffset',0)) . sprintf('%.2x',ReadingsVal($name,'winOpnSensitivity',0)) . sprintf('%.2x',ReadingsVal($name,'winOpnPeriod',0)) if( $setCmd eq 'tempEco' );
+    return '00' . sprintf('%.2x',ReadingsVal($name,'desired-temp',0)*2) . sprintf('%.2x',$value*2) . sprintf('%.2x',ReadingsVal($name,'tempComfort',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempOffset',0)) . sprintf('%.2x',$winOpnSensitivity{'Sensitivity'}{ReadingsVal($name,'winOpnSensitivity',0)}) . sprintf('%.2x',ReadingsVal($name,'winOpnPeriod',0)) if( $setCmd eq 'tempEco' );
     
-    return '00' . sprintf('%.2x',ReadingsVal($name,'desired-temp',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempEco',0)*2) . sprintf('%.2x',$value*2) . sprintf('%.2x',ReadingsVal($name,'tempOffset',0)) . sprintf('%.2x',ReadingsVal($name,'winOpnSensitivity',0)) . sprintf('%.2x',ReadingsVal($name,'winOpnPeriod',0)) if( $setCmd eq 'tempComfort' );
+    return '00' . sprintf('%.2x',ReadingsVal($name,'desired-temp',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempEco',0)*2) . sprintf('%.2x',$value*2) . sprintf('%.2x',ReadingsVal($name,'tempOffset',0)) . sprintf('%.2x',$winOpnSensitivity{'Sensitivity'}{ReadingsVal($name,'winOpnSensitivity',0)}) . sprintf('%.2x',ReadingsVal($name,'winOpnPeriod',0)) if( $setCmd eq 'tempComfort' );
     
-    return '00' . sprintf('%.2x',ReadingsVal($name,'desired-temp',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempEco',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempComfort',0)*2) . sprintf('%.2x',$value) . sprintf('%.2x',ReadingsVal($name,'winOpnSensitivity',0)) . sprintf('%.2x',ReadingsVal($name,'winOpnPeriod',0)) if( $setCmd eq 'tempOffset' );
+    return '00' . sprintf('%.2x',ReadingsVal($name,'desired-temp',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempEco',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempComfort',0)*2) . sprintf('%.2x',$value) . sprintf('%.2x',$winOpnSensitivity{'Sensitivity'}{ReadingsVal($name,'winOpnSensitivity',0)}) . sprintf('%.2x',ReadingsVal($name,'winOpnPeriod',0)) if( $setCmd eq 'tempOffset' );
     
-    return '00' . sprintf('%.2x',ReadingsVal($name,'desired-temp',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempEco',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempComfort',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempOffset',0)) . sprintf('%.2x',$value) . sprintf('%.2x',ReadingsVal($name,'winOpnPeriod',0)) if( $setCmd eq 'winOpnSensitivity' );
+    return '00' . sprintf('%.2x',ReadingsVal($name,'desired-temp',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempEco',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempComfort',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempOffset',0)) . sprintf('%.2x',$winOpnSensitivity{'Sensitivity'}{$value}) . sprintf('%.2x',ReadingsVal($name,'winOpnPeriod',0)) if( $setCmd eq 'winOpnSensitivity' );
     
-    return '00' . sprintf('%.2x',ReadingsVal($name,'desired-temp',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempEco',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempComfort',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempOffset',0)) . sprintf('%.2x',ReadingsVal($name,'winOpnSensitivity',0)) . sprintf('%.2x',$value) if( $setCmd eq 'winOpnPeriod' );
+    return '00' . sprintf('%.2x',ReadingsVal($name,'desired-temp',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempEco',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempComfort',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempOffset',0)) . sprintf('%.2x',$winOpnSensitivity{'Sensitivity'}{ReadingsVal($name,'winOpnSensitivity',0)}) . sprintf('%.2x',$value) if( $setCmd eq 'winOpnPeriod' );
 }
+
 
 
 
