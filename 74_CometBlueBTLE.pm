@@ -49,13 +49,14 @@ use JSON;
 use Blocking;
 
 
-my $version = "0.1.7";
+my $version = "0.1.11";
 
 
 
 
 my %gatttChar = (
-        CometBlue   => {'devicename' => '0x3', 'battery' => '0x41', 'payload' => '0x3f', 'firmware' => '0x18', 'pin' => '0x47'}
+        CometBlue       => {'devicename' => '0x3', 'battery' => '0x41', 'payload' => '0x3f', 'firmware' => '0x18', 'pin' => '0x47'},
+        SilverCrest     => {'devicename' => '0x3', 'battery' => '0x3f', 'payload' => '0x3d', 'firmware' => '0x18', 'pin' => '0x48'}
     );
     
 my %winOpnSensitivity = ( 
@@ -126,7 +127,7 @@ sub CometBlueBTLE_Initialize($) {
                             "sshHost ".
                             "blockingCallLoglevel:2,3,4,5 ".
                             "pin ".
-                            "model:XavaxHama,SygonixHT100BT,CometBlue ".
+                            "model:CometBlue,SilverCrest ".         # XavaxHama,SygonixHT100BT,
                             $readingFnAttributes;
 
 
@@ -335,6 +336,11 @@ sub CometBlueBTLE_Set($$@) {
         
         $mod = 'write'; $handle = $gatttChar{AttrVal($name,'model','')}{'payload'};
         $value = join( " ", @args);
+        
+    } elsif( $cmd eq 'nert' ) {
+    
+        $mod = 'write'; $handle = $gatttChar{AttrVal($name,'model','')}{'noep'};
+        $value = join( " ", @args);
     
     } else {
         my  $list = "desired-temp:on,off,6,6.5,7,7.5,8,8.5,9,9.5,10,10.5,11,11.5,12,12.5,13,13.5,14,14.5,15,15.5,16,16.5,17,17.5,18,18.5,19,19.5,20,20.5,21,21.5,22,22.5,23,23.5,24,24.5,25,25.5,26,26.5,27,27.5,28";
@@ -344,7 +350,7 @@ sub CometBlueBTLE_Set($$@) {
     
     return 'another process is running, try again later' if( $hash->{helper}{writePin} == 1 );
 
-    CometBlueBTLE_CreateParamGatttool($hash,$mod,$handle,CometBlueBTLE_CreatePayloadString($hash,$cmd,$value));
+    CometBlueBTLE_CreateParamGatttool($hash,'write',$handle,CometBlueBTLE_CreatePayloadString($hash,$cmd,$value));
     
     return undef;
 }
@@ -353,8 +359,7 @@ sub CometBlueBTLE_Get($$@) {
     
     my ($hash, $name, @aa)  = @_;
     my ($cmd, @args)        = @aa;
-    
-    my $mod                 = 'read';
+
     my $handle;
 
 
@@ -367,12 +372,12 @@ sub CometBlueBTLE_Get($$@) {
     } elsif( $cmd eq 'firmware' ) {
         return 'usage: firmware' if( @args != 0 );
 
-        $mod = 'read'; $handle = $gatttChar{AttrVal($name,'model','')}{'firmware'};
+        $handle = $gatttChar{AttrVal($name,'model','')}{'firmware'};
         
     } elsif( $cmd eq 'devicename' ) {
         return 'usage: devicename' if( @args != 0 );
 
-        $mod = 'read'; $handle = $gatttChar{AttrVal($name,'model','')}{'devicename'};
+        $handle = $gatttChar{AttrVal($name,'model','')}{'devicename'};
         
     } else {
         my $list = "temperatures:noArg devicename:noArg firmware:noArg";
@@ -381,7 +386,7 @@ sub CometBlueBTLE_Get($$@) {
 
     return 'another process is running, try again later' if( $hash->{helper}{writePin} == 1 );
 
-    CometBlueBTLE_CreateParamGatttool($hash,$mod,$handle) if( $cmd ne 'temperatures' );
+    CometBlueBTLE_CreateParamGatttool($hash,'read',$handle) if( $cmd ne 'temperatures' );
 
     return undef;
 }
@@ -484,20 +489,33 @@ sub CometBlueBTLE_ExecGatttool_Run($) {
         
         Log3 $name, 3, "CometBlueBTLE ($name) - ExecGatttool_Run: gatttool result ".join(",", @gtResult);
 
+        
         $gtResult[1] = 'no data response'
         unless( defined($gtResult[1]) );
-        
+
+        $gtResult[1] = 'wrong PIN'
+        if( $gtResult[1] =~ /Attribute value length is invalid/ );
+
+    
         $json_notification = CometBlueBTLE_encodeJSON($gtResult[1]);
         
         if($gtResult[1] =~ /^([0-9a-f]{2}(\s?))*$/) {
             return "$name|$mac|ok|$gattCmd|$handle|$json_notification";
+        
         } elsif($handle eq $gatttChar{AttrVal($name,'model','')}{'pin'} and $gattCmd eq 'write') {
-            return "$name|$mac|ok|$gattCmd|$handle|$json_notification";
+            if($gtResult[1] eq 'wrong PIN') {
+                return "$name|$mac|error|$gattCmd|$handle|$json_notification";
+            } else {
+                return "$name|$mac|ok|$gattCmd|$handle|$json_notification";
+            }
+        
         } elsif($gtResult[1] eq 'no data response' and $gattCmd eq 'write') {
             return "$name|$mac|ok|$gattCmd|$handle|$json_notification";
+        
         } else {
             return "$name|$mac|error|$gattCmd|$handle|$json_notification";
         }
+        
     } else {
         $json_notification = CometBlueBTLE_encodeJSON('no gatttool binary found. Please check if bluez-package is properly installed');
         return "$name|$mac|error|$gattCmd|$handle|$json_notification";
@@ -520,6 +538,7 @@ sub CometBlueBTLE_ExecGatttool_Done($) {
     Log3 $name, 3, "CometBlueBTLE ($name) - ExecGatttool_Done: gatttool return string: $string";
     
     if( $respstate eq 'ok' and $gattCmd eq 'write' and $handle ne $gatttChar{AttrVal($name,'model','')}{'pin'} and $hash->{helper}{writePin} == 1 ) {
+        readingsSingleUpdate($hash, "lastChangeBy", "FHEM", 1);
         return CometBlueBTLE_CreateParamGatttool($hash,'read',$hash->{helper}{paramGatttool}{handle})
     }
     
@@ -600,8 +619,6 @@ sub CometBlueBTLE_ProcessingNotification($@) {
         $readings = CometBlueBTLE_HandleDevicename($hash,$notification);
     }
     
-    
-    readingsSingleUpdate($hash, "lastChangeBy", "FHEM", 1) if( $gattCmd eq 'write' );
     
     CometBlueBTLE_WriteReadings($hash,$readings);
 }
@@ -705,9 +722,10 @@ sub CometBlueBTLE_WriteReadings($$) {
 
     readingsBeginUpdate($hash);
     while( my ($r,$v) = each %{$readings} ) {
-        Log3 $name, 3, "CometBlueBTLE ($name) - WriteReadings: Reading $r, value $v altes value " . ReadingsVal($name, $r,"");
+        Log3 $name, 5, "CometBlueBTLE ($name) - WriteReadings: Reading $r, value $v altes value " . ReadingsVal($name, $r,"");
         readingsBulkUpdateIfChanged($hash, "lastChangeBy", "Thermostat") if( ReadingsVal($name, $r,"") ne $v and $r ne 'measured-temp' );
-        readingsBulkUpdateIfChanged($hash,$r,$v);
+        readingsBulkUpdateIfChanged($hash,$r,$v) if( $r ne 'lastGattError' );
+        readingsBulkUpdate($hash,$r,$v) if( $r eq 'lastGattError' );
     }
 
     readingsBulkUpdateIfChanged($hash, "state", ($readings->{'lastGattError'}?'error':'T: '. ReadingsVal($name,'measured-temp',-100) . ' desired: ' . ReadingsVal($name,'desired-temp',-100)));
@@ -808,10 +826,6 @@ sub CometBlueBTLE_CreatePayloadString($$$) {
 
     $value = 00 if($value eq 'off');
     $value = 28 if($value eq 'on');
-    
-    Log3 $name, 3, "CometBlueBTLE ($name) - winOpnSensitivity ist: " . ReadingsVal($name,'winOpnSensitivity',0);
-    Log3 $name, 3, "CometBlueBTLE ($name) - winOpnSensitivity ist: " . $winOpnSensitivity{'Sensitivity'}{ReadingsVal($name,'winOpnSensitivity',0)};
-    Log3 $name, 3, "CometBlueBTLE ($name) - winOpnSensitivity ist: " . sprintf('%.2x',$winOpnSensitivity{'Sensitivity'}{ReadingsVal($name,'winOpnSensitivity',0)});
 
     return '00' . sprintf('%.2x',$value*2) . sprintf('%.2x',ReadingsVal($name,'tempEco',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempComfort',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempOffset',0)) . sprintf('%.2x',$winOpnSensitivity{'Sensitivity'}{ReadingsVal($name,'winOpnSensitivity',0)}) . sprintf('%.2x',ReadingsVal($name,'winOpnPeriod',0)) if( $setCmd eq 'desired-temp' );
     
@@ -824,6 +838,7 @@ sub CometBlueBTLE_CreatePayloadString($$$) {
     return '00' . sprintf('%.2x',ReadingsVal($name,'desired-temp',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempEco',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempComfort',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempOffset',0)) . sprintf('%.2x',$winOpnSensitivity{'Sensitivity'}{$value}) . sprintf('%.2x',ReadingsVal($name,'winOpnPeriod',0)) if( $setCmd eq 'winOpnSensitivity' );
     
     return '00' . sprintf('%.2x',ReadingsVal($name,'desired-temp',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempEco',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempComfort',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempOffset',0)) . sprintf('%.2x',$winOpnSensitivity{'Sensitivity'}{ReadingsVal($name,'winOpnSensitivity',0)}) . sprintf('%.2x',$value) if( $setCmd eq 'winOpnPeriod' );
+
 }
 
 
