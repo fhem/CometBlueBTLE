@@ -49,7 +49,7 @@ use JSON;
 use Blocking;
 
 
-my $version = "0.1.11";
+my $version = "0.1.20";
 
 
 
@@ -762,8 +762,8 @@ sub CometBlueBTLE_WriteReadings($$) {
 
     readingsBeginUpdate($hash);
     while( my ($r,$v) = each %{$readings} ) {
-        Log3 $name, 5, "CometBlueBTLE ($name) - WriteReadings: Reading $r, value $v altes value " . ReadingsVal($name, $r,"");
-        readingsBulkUpdateIfChanged($hash, "lastChangeBy", "Thermostat") if( ReadingsVal($name, $r,"") ne $v and $r ne 'measured-temp' and ReadingsAge($name,'lastChangeBy", "Thermostat',300) < 30 );
+        Log3 $name, 3, "CometBlueBTLE ($name) - WriteReadings: Reading $r, value $v altes value " . ReadingsVal($name, $r,"");
+        readingsBulkUpdateIfChanged($hash, "lastChangeBy", "Thermostat") if( ReadingsVal($name, $r,"") ne $v and $r ne 'measured-temp' and ReadingsAge($name,'lastChangeBy',300) > 30 );
         readingsBulkUpdateIfChanged($hash,$r,$v) if( $r ne 'lastGattError' );
         readingsBulkUpdate($hash,$r,$v) if( $r eq 'lastGattError' );
     }
@@ -867,17 +867,17 @@ sub CometBlueBTLE_CreatePayloadString($$$) {
     $value = 00 if($value eq 'off');
     $value = 28 if($value eq 'on');
 
-    return '00' . sprintf('%.2x',$value*2) . sprintf('%.2x',ReadingsVal($name,'tempEco',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempComfort',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempOffset',0)) . sprintf('%.2x',$winOpnSensitivity{'Sensitivity'}{ReadingsVal($name,'winOpnSensitivity',0)}) . sprintf('%.2x',ReadingsVal($name,'winOpnPeriod',0)) if( $setCmd eq 'desired-temp' );
+    return sprintf('%.2x',ReadingsVal($name,'measured-temp',0)*2) . sprintf('%.2x',$value*2) . sprintf('%.2x',ReadingsVal($name,'tempEco',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempComfort',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempOffset',0)) . sprintf('%.2x',$winOpnSensitivity{'Sensitivity'}{ReadingsVal($name,'winOpnSensitivity',0)}) . sprintf('%.2x',ReadingsVal($name,'winOpnPeriod',0)) if( $setCmd eq 'desired-temp' );
     
-    return '00' . sprintf('%.2x',ReadingsVal($name,'desired-temp',0)*2) . sprintf('%.2x',$value*2) . sprintf('%.2x',ReadingsVal($name,'tempComfort',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempOffset',0)) . sprintf('%.2x',$winOpnSensitivity{'Sensitivity'}{ReadingsVal($name,'winOpnSensitivity',0)}) . sprintf('%.2x',ReadingsVal($name,'winOpnPeriod',0)) if( $setCmd eq 'tempEco' );
+    return sprintf('%.2x',ReadingsVal($name,'measured-temp',0)*2) . sprintf('%.2x',ReadingsVal($name,'desired-temp',0)*2) . sprintf('%.2x',$value*2) . sprintf('%.2x',ReadingsVal($name,'tempComfort',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempOffset',0)) . sprintf('%.2x',$winOpnSensitivity{'Sensitivity'}{ReadingsVal($name,'winOpnSensitivity',0)}) . sprintf('%.2x',ReadingsVal($name,'winOpnPeriod',0)) if( $setCmd eq 'tempEco' );
     
-    return '00' . sprintf('%.2x',ReadingsVal($name,'desired-temp',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempEco',0)*2) . sprintf('%.2x',$value*2) . sprintf('%.2x',ReadingsVal($name,'tempOffset',0)) . sprintf('%.2x',$winOpnSensitivity{'Sensitivity'}{ReadingsVal($name,'winOpnSensitivity',0)}) . sprintf('%.2x',ReadingsVal($name,'winOpnPeriod',0)) if( $setCmd eq 'tempComfort' );
+    return sprintf('%.2x',ReadingsVal($name,'measured-temp',0)*2) . sprintf('%.2x',ReadingsVal($name,'desired-temp',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempEco',0)*2) . sprintf('%.2x',$value*2) . sprintf('%.2x',ReadingsVal($name,'tempOffset',0)) . sprintf('%.2x',$winOpnSensitivity{'Sensitivity'}{ReadingsVal($name,'winOpnSensitivity',0)}) . sprintf('%.2x',ReadingsVal($name,'winOpnPeriod',0)) if( $setCmd eq 'tempComfort' );
     
-    return '00' . sprintf('%.2x',ReadingsVal($name,'desired-temp',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempEco',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempComfort',0)*2) . sprintf('%.2x',$value) . sprintf('%.2x',$winOpnSensitivity{'Sensitivity'}{ReadingsVal($name,'winOpnSensitivity',0)}) . sprintf('%.2x',ReadingsVal($name,'winOpnPeriod',0)) if( $setCmd eq 'tempOffset' );
+    return sprintf('%.2x',ReadingsVal($name,'measured-temp',0)*2) . sprintf('%.2x',ReadingsVal($name,'desired-temp',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempEco',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempComfort',0)*2) . sprintf('%.2x',$value) . sprintf('%.2x',$winOpnSensitivity{'Sensitivity'}{ReadingsVal($name,'winOpnSensitivity',0)}) . sprintf('%.2x',ReadingsVal($name,'winOpnPeriod',0)) if( $setCmd eq 'tempOffset' );
     
-    return '00' . sprintf('%.2x',ReadingsVal($name,'desired-temp',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempEco',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempComfort',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempOffset',0)) . sprintf('%.2x',$winOpnSensitivity{'Sensitivity'}{$value}) . sprintf('%.2x',ReadingsVal($name,'winOpnPeriod',0)) if( $setCmd eq 'winOpnSensitivity' );
+    return sprintf('%.2x',ReadingsVal($name,'measured-temp',0)*2) . sprintf('%.2x',ReadingsVal($name,'desired-temp',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempEco',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempComfort',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempOffset',0)) . sprintf('%.2x',$winOpnSensitivity{'Sensitivity'}{$value}) . sprintf('%.2x',ReadingsVal($name,'winOpnPeriod',0)) if( $setCmd eq 'winOpnSensitivity' );
     
-    return '00' . sprintf('%.2x',ReadingsVal($name,'desired-temp',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempEco',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempComfort',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempOffset',0)) . sprintf('%.2x',$winOpnSensitivity{'Sensitivity'}{ReadingsVal($name,'winOpnSensitivity',0)}) . sprintf('%.2x',$value) if( $setCmd eq 'winOpnPeriod' );
+    return sprintf('%.2x',ReadingsVal($name,'measured-temp',0)*2) . sprintf('%.2x',ReadingsVal($name,'desired-temp',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempEco',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempComfort',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempOffset',0)) . sprintf('%.2x',$winOpnSensitivity{'Sensitivity'}{ReadingsVal($name,'winOpnSensitivity',0)}) . sprintf('%.2x',$value) if( $setCmd eq 'winOpnPeriod' );
 
 }
 
