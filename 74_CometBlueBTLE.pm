@@ -29,9 +29,10 @@
 ##
 ## Name                	Preis      	Vertrieb über
 ## -----------------------------------------------
-## Xavax Hama          	40 Euro    	Media Markt
-## Sygonix HT100 BT    	20 Euro    	Conrad
-## Comet Blue          	20 Euro    	Real / Bauhaus
+## Xavax Hama           40 Euro     Media Markt
+## Sygonix HT100 BT     20 Euro     Conrad
+## Comet Blue           20 Euro     Real / Bauhaus
+## SilverCrest          15 Euro     Aldi
 
         
         
@@ -49,7 +50,7 @@ use JSON;
 use Blocking;
 
 
-my $version = "0.1.25";
+my $version = "0.1.27";
 
 
 
@@ -57,7 +58,10 @@ my $version = "0.1.25";
 my %gatttChar = (
         CometBlue       => {'devicename' => '0x3', 'battery' => '0x41', 'payload' => '0x3f', 'firmware' => '0x18', 'pin' => '0x47', 'date' => '0x1d',
                             'tempLists' => '0x29,0x2b,0x1f,0x21,0x23,0x25,0x27'},
-        SilverCrest     => {'devicename' => '0x3', 'battery' => '0x3f', 'payload' => '0x3d', 'firmware' => '0x18', 'pin' => '0x48'}
+        Sygonix         => {'devicename' => '0x3', 'battery' => '0x41', 'payload' => '0x3f', 'firmware' => '0x18', 'pin' => '0x47', 'date' => '0x1d',
+                            'tempLists' => '0x29,0x2b,0x1f,0x21,0x23,0x25,0x27'},
+        SilverCrest     => {'devicename' => '0x3', 'battery' => '0x3f', 'payload' => '0x3d', 'firmware' => '0x18', 'pin' => '0x48'};
+        THERMyBlue      => {'devicename' => '0x3', 'battery' => '0x3f', 'payload' => '0x3d', 'firmware' => '0x18', 'pin' => '0x48'}
     );
     
 my %winOpnSensitivity = ( 
@@ -128,7 +132,7 @@ sub CometBlueBTLE_Initialize($) {
                             "sshHost ".
                             "blockingCallLoglevel:2,3,4,5 ".
                             "pin ".
-                            "model:CometBlue,SilverCrest ".         # XavaxHama,SygonixHT100BT,
+                            "model:CometBlue,SilverCrest,Sygonix,THERMyBlue ".
                             $readingFnAttributes;
 
 
@@ -371,9 +375,9 @@ sub CometBlueBTLE_Set($$@) {
         $value = join( " ", @args);
     
     } else {
-        my  $list = "desired-temp:on,off,8.5,9,9.5,10,10.5,11,11.5,12,12.5,13,13.5,14,14.5,15,15.5,16,16.5,17,17.5,18,18.5,19,19.5,20,20.5,21,21.5,22,22.5,23,23.5,24,24.5,25,25.5,26,26.5,27,27.5";
-            $list .= " tempEco:on,off,8.5,9,9.5,10,10.5,11,11.5,12,12.5,13,13.5,14,14.5,15,15.5,16,16.5,17,17.5,18,18.5,19,19.5,20,20.5,21,21.5,22,22.5,23,23.5,24,24.5,25,25.5,26,26.5,27,27.5";
-            $list .= " tempComfort:on,off,8.5,9,9.5,10,10.5,11,11.5,12,12.5,13,13.5,14,14.5,15,15.5,16,16.5,17,17.5,18,18.5,19,19.5,20,20.5,21,21.5,22,22.5,23,23.5,24,24.5,25,25.5,26,26.5,27,27.5";
+        my  $list = "desired-temp:on,off,8.5,9.0,9.5,10.0,10.5,11.0,11.5,12.0,12.5,13.0,13.5,14.0,14.5,15.0,15.5,16.0,16.5,17.0,17.5,18.0,18.5,19.0,19.5,20.0,20.5,21.0,21.5,22.0,22.5,23.0,23.5,24.0,24.5,25.0,25.5,26.0,26.5,27.0,27.5";
+            $list .= " tempEco:on,off,8.5,9.0,9.5,10.0,10.5,11.0,11.5,12.0,12.5,13.0,13.5,14.0,14.5,15.0,15.5,16.0,16.5,17.0,17.5,18.0,18.5,19.0,19.5,20.0,20.5,21.0,21.5,22.0,22.5,23.0,23.5,24.0,24.5,25.0,25.5,26.0,26.5,27.0,27.5";
+            $list .= " tempComfort:on,off,8.5,9.0,9.5,10.0,10.5,11.0,11.5,12.0,12.5,13.0,13.5,14.0,14.5,15.0,15.5,16.0,16.5,17.0,17.5,18.0,18.5,19.0,19.5,20.0,20.5,21.0,21.5,22.0,22.5,23.0,23.5,24.0,24.5,25.0,25.5,26.0,26.5,27.0,27.5";
             $list .= " tempOffset:-5,-4.5,-4,-3.5,-3,-2.5,-2,-1.5,-1,-0.5,0,0.5,1,1.5,2,2.5,3,3.5,4,4.5,5 winOpnSensitivity:high,medium,low winOpnPeriod:slider,5,5,30";
             
         return "Unknown argument $cmd, choose one of $list";
