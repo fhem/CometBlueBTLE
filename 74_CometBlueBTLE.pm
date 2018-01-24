@@ -49,7 +49,7 @@ use JSON;
 use Blocking;
 
 
-my $version = "0.1.20";
+my $version = "0.1.25";
 
 
 
@@ -332,33 +332,34 @@ sub CometBlueBTLE_Set($$@) {
     
     if( $cmd eq 'desired-temp' ) {
         return 'CometBlueBTLE: desired-temp requires <temperature> in celsius degrees as additional parameter' if(@args < 1);
-        return 'CometBlueBTLE: desired-temp supports temperatures from 6.0 - 28.0 degrees' if($args[0]<6.0 || $args[0]>28.0);
+        #return 'CometBlueBTLE: desired-temp supports temperatures from 6.0 - 28.0 degrees' if($args[0]<6.0 or $args[0]>28.0);
         
         $handle = $gatttChar{AttrVal($name,'model','')}{'payload'};
         $value = join( " ", @args);
         
     } elsif( $cmd eq 'tempEco' ) {
         return 'CometBlueBTLE: tempEco requires <temperature> in celsius degrees as additional parameter' if(@args < 1);
-        return 'CometBlueBTLE: tempEco supports temperatures from 6.0 - 28.0 degrees' if($args[0]<6.0 || $args[0]>28.0);
+        #return 'CometBlueBTLE: tempEco supports temperatures from 6.0 - 28.0 degrees' if($args[0]<6.0 or $args[0]>28.0);
     
         $handle = $gatttChar{AttrVal($name,'model','')}{'payload'};
         $value = join( " ", @args);
         
     } elsif( $cmd eq 'tempComfort' ) {
         return 'CometBlueBTLE: tempComfort requires <temperature> in celsius degrees as additional parameter' if(@args < 1);
-        return 'CometBlueBTLE: tempComfort supports temperatures from 6.0 - 28.0 degrees' if($args[0]<6.0 || $args[0]>28.0);
+        #return 'CometBlueBTLE: tempComfort supports temperatures from 6.0 - 28.0 degrees' if($args[0]<6.0 or $args[0]>28.0);
     
         $handle = $gatttChar{AttrVal($name,'model','')}{'payload'};
         $value = join( " ", @args);
         
     } elsif( $cmd eq 'tempOffset' ) {
         return 'CometBlueBTLE: tempOffset requires a additional parameter' if(@args < 1);
+        return 'CometBlueBTLE: tempOffset supports values from -5.0 - 5.0' if($args[0] < -5.0 or $args[0] > 5.0);
     
         $handle = $gatttChar{AttrVal($name,'model','')}{'payload'};
         $value = join( " ", @args);
         
     } elsif( $cmd eq 'winOpnSensitivity' ) {
-        return 'CometBlueBTLE: winOpnSensitivity requires a additional parameter high,medium or low' if(@args < 1);
+        return 'CometBlueBTLE: winOpnSensitivity requires a additional parameter high,medium or low' if(@args < 1 or $args[0] ne 'high' or $args[0] ne 'medium' or $args[0] ne 'low');
     
         $handle = $gatttChar{AttrVal($name,'model','')}{'payload'};
         $value = join( " ", @args);
@@ -370,10 +371,10 @@ sub CometBlueBTLE_Set($$@) {
         $value = join( " ", @args);
     
     } else {
-        my  $list = "desired-temp:on,off,6,6.5,7,7.5,8,8.5,9,9.5,10,10.5,11,11.5,12,12.5,13,13.5,14,14.5,15,15.5,16,16.5,17,17.5,18,18.5,19,19.5,20,20.5,21,21.5,22,22.5,23,23.5,24,24.5,25,25.5,26,26.5,27,27.5,28";
-            $list .= " tempEco:6,6.5,7,7.5,8,8.5,9,9.5,10,10.5,11,11.5,12,12.5,13,13.5,14,14.5,15,15.5,16,16.5,17,17.5,18,18.5,19,19.5,20,20.5,21,21.5,22,22.5,23,23.5,24,24.5,25,25.5,26,26.5,27,27.5,28";
-            $list .= " tempComfort:6,6.5,7,7.5,8,8.5,9,9.5,10,10.5,11,11.5,12,12.5,13,13.5,14,14.5,15,15.5,16,16.5,17,17.5,18,18.5,19,19.5,20,20.5,21,21.5,22,22.5,23,23.5,24,24.5,25,25.5,26,26.5,27,27.5,28";
-            $list .= " tempOffset:0,1,2 winOpnSensitivity:high,medium,low winOpnPeriod:slider,5,5,30";
+        my  $list = "desired-temp:on,off,8.5,9,9.5,10,10.5,11,11.5,12,12.5,13,13.5,14,14.5,15,15.5,16,16.5,17,17.5,18,18.5,19,19.5,20,20.5,21,21.5,22,22.5,23,23.5,24,24.5,25,25.5,26,26.5,27,27.5";
+            $list .= " tempEco:on,off,8.5,9,9.5,10,10.5,11,11.5,12,12.5,13,13.5,14,14.5,15,15.5,16,16.5,17,17.5,18,18.5,19,19.5,20,20.5,21,21.5,22,22.5,23,23.5,24,24.5,25,25.5,26,26.5,27,27.5";
+            $list .= " tempComfort:on,off,8.5,9,9.5,10,10.5,11,11.5,12,12.5,13,13.5,14,14.5,15,15.5,16,16.5,17,17.5,18,18.5,19,19.5,20,20.5,21,21.5,22,22.5,23,23.5,24,24.5,25,25.5,26,26.5,27,27.5";
+            $list .= " tempOffset:-5,-4.5,-4,-3.5,-3,-2.5,-2,-1.5,-1,-0.5,0,0.5,1,1.5,2,2.5,3,3.5,4,4.5,5 winOpnSensitivity:high,medium,low winOpnPeriod:slider,5,5,30";
             
         return "Unknown argument $cmd, choose one of $list";
     }
@@ -415,7 +416,7 @@ sub CometBlueBTLE_Get($$@) {
         $handle = $gatttChar{AttrVal($name,'model','')}{'tempLists'};
         
     } else {
-        my $list = "temperatures:noArg devicename:noArg firmware:noArg tempLists:noArg";
+        my $list = "temperatures:noArg devicename:noArg firmware:noArg";
         return "Unknown argument $cmd, choose one of $list";
     }
 
@@ -621,6 +622,8 @@ sub CometBlueBTLE_ExecGatttool_Aborted($) {
     $readings{'lastGattError'} = 'The BlockingCall Process terminated unexpectedly. Timedout';
     CometBlueBTLE_WriteReadings($hash,\%readings);
 
+    $hash->{helper}{writePin} = 0;
+
     Log3 $name, 3, "CometBlueBTLE ($name) - ExecGatttool_Aborted: The BlockingCall Process terminated unexpectedly. Timedout";
 }
 
@@ -711,7 +714,13 @@ sub CometBlueBTLE_HandlePayload($$) {
     $readings{'desired-temp'}       = hex("0x".$payload[1])/2;
     $readings{'tempEco'}            = hex("0x".$payload[2])/2;
     $readings{'tempComfort'}        = hex("0x".$payload[3])/2;
-    $readings{'tempOffset'}         = hex("0x".$payload[4]);
+    
+    if( $payload[4] =~ /^f/ ) {
+        $readings{'tempOffset'}         = (hex("0x".$payload[4])/2)-128;
+    } else {
+        $readings{'tempOffset'}         = hex("0x".$payload[4])/2;
+    }
+    
     $readings{'winOpnSensitivity'}  = $winOpnSensitivity{'Sensitivity'}{hex("0x".$payload[5])};
     $readings{'winOpnPeriod'}       = hex("0x".$payload[6]);
         
@@ -762,7 +771,7 @@ sub CometBlueBTLE_WriteReadings($$) {
 
     readingsBeginUpdate($hash);
     while( my ($r,$v) = each %{$readings} ) {
-        Log3 $name, 3, "CometBlueBTLE ($name) - WriteReadings: Reading $r, value $v altes value " . ReadingsVal($name, $r,"");
+        Log3 $name, 5, "CometBlueBTLE ($name) - WriteReadings: Reading $r, value $v altes value " . ReadingsVal($name, $r,"");
         readingsBulkUpdateIfChanged($hash, "lastChangeBy", "Thermostat") if( ReadingsVal($name, $r,"") ne $v and $r ne 'measured-temp' and ReadingsAge($name,'lastChangeBy',300) > 30 );
         readingsBulkUpdateIfChanged($hash,$r,$v) if( $r ne 'lastGattError' );
         readingsBulkUpdate($hash,$r,$v) if( $r eq 'lastGattError' );
@@ -867,19 +876,20 @@ sub CometBlueBTLE_CreatePayloadString($$$) {
     $value = 00 if($value eq 'off');
     $value = 28 if($value eq 'on');
 
-    return sprintf('%.2x',ReadingsVal($name,'measured-temp',0)*2) . sprintf('%.2x',$value*2) . sprintf('%.2x',ReadingsVal($name,'tempEco',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempComfort',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempOffset',0)) . sprintf('%.2x',$winOpnSensitivity{'Sensitivity'}{ReadingsVal($name,'winOpnSensitivity',0)}) . sprintf('%.2x',ReadingsVal($name,'winOpnPeriod',0)) if( $setCmd eq 'desired-temp' );
+    return sprintf('%.2x',ReadingsVal($name,'measured-temp',0)*2) . sprintf('%.2x',$value*2) . sprintf('%.2x',ReadingsVal($name,'tempEco',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempComfort',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempOffset',0)*2+(ReadingsVal($name,'tempOffset',0) < 0 ? 256 : 0)) . sprintf('%.2x',$winOpnSensitivity{'Sensitivity'}{ReadingsVal($name,'winOpnSensitivity',0)}) . sprintf('%.2x',ReadingsVal($name,'winOpnPeriod',0)) if( $setCmd eq 'desired-temp' );
     
-    return sprintf('%.2x',ReadingsVal($name,'measured-temp',0)*2) . sprintf('%.2x',ReadingsVal($name,'desired-temp',0)*2) . sprintf('%.2x',$value*2) . sprintf('%.2x',ReadingsVal($name,'tempComfort',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempOffset',0)) . sprintf('%.2x',$winOpnSensitivity{'Sensitivity'}{ReadingsVal($name,'winOpnSensitivity',0)}) . sprintf('%.2x',ReadingsVal($name,'winOpnPeriod',0)) if( $setCmd eq 'tempEco' );
+    return sprintf('%.2x',ReadingsVal($name,'measured-temp',0)*2) . sprintf('%.2x',ReadingsVal($name,'desired-temp',0)*2) . sprintf('%.2x',$value*2) . sprintf('%.2x',ReadingsVal($name,'tempComfort',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempOffset',0)*2+(ReadingsVal($name,'tempOffset',0) < 0 ? 256 : 0)) . sprintf('%.2x',$winOpnSensitivity{'Sensitivity'}{ReadingsVal($name,'winOpnSensitivity',0)}) . sprintf('%.2x',ReadingsVal($name,'winOpnPeriod',0)) if( $setCmd eq 'tempEco' );
     
-    return sprintf('%.2x',ReadingsVal($name,'measured-temp',0)*2) . sprintf('%.2x',ReadingsVal($name,'desired-temp',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempEco',0)*2) . sprintf('%.2x',$value*2) . sprintf('%.2x',ReadingsVal($name,'tempOffset',0)) . sprintf('%.2x',$winOpnSensitivity{'Sensitivity'}{ReadingsVal($name,'winOpnSensitivity',0)}) . sprintf('%.2x',ReadingsVal($name,'winOpnPeriod',0)) if( $setCmd eq 'tempComfort' );
+    return sprintf('%.2x',ReadingsVal($name,'measured-temp',0)*2) . sprintf('%.2x',ReadingsVal($name,'desired-temp',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempEco',0)*2) . sprintf('%.2x',$value*2) . sprintf('%.2x',ReadingsVal($name,'tempOffset',0)*2+(ReadingsVal($name,'tempOffset',0) < 0 ? 256 : 0)) . sprintf('%.2x',$winOpnSensitivity{'Sensitivity'}{ReadingsVal($name,'winOpnSensitivity',0)}) . sprintf('%.2x',ReadingsVal($name,'winOpnPeriod',0)) if( $setCmd eq 'tempComfort' );
     
-    return sprintf('%.2x',ReadingsVal($name,'measured-temp',0)*2) . sprintf('%.2x',ReadingsVal($name,'desired-temp',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempEco',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempComfort',0)*2) . sprintf('%.2x',$value) . sprintf('%.2x',$winOpnSensitivity{'Sensitivity'}{ReadingsVal($name,'winOpnSensitivity',0)}) . sprintf('%.2x',ReadingsVal($name,'winOpnPeriod',0)) if( $setCmd eq 'tempOffset' );
+    return sprintf('%.2x',ReadingsVal($name,'measured-temp',0)*2) . sprintf('%.2x',ReadingsVal($name,'desired-temp',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempEco',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempComfort',0)*2) . sprintf('%.2x',$value*2+($value < 0 ? 256 : 0)) . sprintf('%.2x',$winOpnSensitivity{'Sensitivity'}{ReadingsVal($name,'winOpnSensitivity',0)}) . sprintf('%.2x',ReadingsVal($name,'winOpnPeriod',0)) if( $setCmd eq 'tempOffset' );
     
-    return sprintf('%.2x',ReadingsVal($name,'measured-temp',0)*2) . sprintf('%.2x',ReadingsVal($name,'desired-temp',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempEco',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempComfort',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempOffset',0)) . sprintf('%.2x',$winOpnSensitivity{'Sensitivity'}{$value}) . sprintf('%.2x',ReadingsVal($name,'winOpnPeriod',0)) if( $setCmd eq 'winOpnSensitivity' );
+    return sprintf('%.2x',ReadingsVal($name,'measured-temp',0)*2) . sprintf('%.2x',ReadingsVal($name,'desired-temp',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempEco',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempComfort',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempOffset',0)*2+(ReadingsVal($name,'tempOffset',0) < 0 ? 256 : 0)) . sprintf('%.2x',$winOpnSensitivity{'Sensitivity'}{$value}) . sprintf('%.2x',ReadingsVal($name,'winOpnPeriod',0)) if( $setCmd eq 'winOpnSensitivity' );
     
-    return sprintf('%.2x',ReadingsVal($name,'measured-temp',0)*2) . sprintf('%.2x',ReadingsVal($name,'desired-temp',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempEco',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempComfort',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempOffset',0)) . sprintf('%.2x',$winOpnSensitivity{'Sensitivity'}{ReadingsVal($name,'winOpnSensitivity',0)}) . sprintf('%.2x',$value) if( $setCmd eq 'winOpnPeriod' );
+    return sprintf('%.2x',ReadingsVal($name,'measured-temp',0)*2) . sprintf('%.2x',ReadingsVal($name,'desired-temp',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempEco',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempComfort',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempOffset',0)*2+(ReadingsVal($name,'tempOffset',0) < 0 ? 256 : 0)) . sprintf('%.2x',$winOpnSensitivity{'Sensitivity'}{ReadingsVal($name,'winOpnSensitivity',0)}) . sprintf('%.2x',$value) if( $setCmd eq 'winOpnPeriod' );
 
 }
+
 
 
 
