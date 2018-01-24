@@ -32,12 +32,13 @@
 ## Xavax Hama           40 Euro     Media Markt
 ## Sygonix HT100 BT     20 Euro     Conrad
 ## Comet Blue           20 Euro     Real / Bauhaus
-## SilverCrest          15 Euro     Aldi
+## SilverCrest          15 Euro     Lidl
+## THERMy blue                      Aldi
 
-        
-        
-        
-        
+
+
+
+
 
 
 package main;
@@ -50,7 +51,7 @@ use JSON;
 use Blocking;
 
 
-my $version = "0.1.27";
+my $version = "0.1.28";
 
 
 
@@ -60,7 +61,7 @@ my %gatttChar = (
                             'tempLists' => '0x29,0x2b,0x1f,0x21,0x23,0x25,0x27'},
         Sygonix         => {'devicename' => '0x3', 'battery' => '0x41', 'payload' => '0x3f', 'firmware' => '0x18', 'pin' => '0x47', 'date' => '0x1d',
                             'tempLists' => '0x29,0x2b,0x1f,0x21,0x23,0x25,0x27'},
-        SilverCrest     => {'devicename' => '0x3', 'battery' => '0x3f', 'payload' => '0x3d', 'firmware' => '0x18', 'pin' => '0x48'};
+        SilverCrest     => {'devicename' => '0x3', 'battery' => '0x3f', 'payload' => '0x3d', 'firmware' => '0x18', 'pin' => '0x48'},
         THERMyBlue      => {'devicename' => '0x3', 'battery' => '0x3f', 'payload' => '0x3d', 'firmware' => '0x18', 'pin' => '0x48'}
     );
     
