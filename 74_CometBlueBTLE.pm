@@ -51,7 +51,7 @@ use JSON;
 use Blocking;
 
 
-my $version = "0.1.30";
+my $version = "0.1.31";
 
 
 
@@ -587,7 +587,7 @@ sub CometBlueBTLE_ExecGatttool_Done($) {
     Log3 $name, 4, "CometBlueBTLE ($name) - ExecGatttool_Done: gatttool return string: $string";
     
     
-    if( $respstate eq 'ok' and ($gattCmd eq 'write' or (defined($hash->{actionQueue}) and scalar(@{$hash->{actionQueue}}) > 0)) and $handle ne $gatttChar{AttrVal($name,'model','')}{'pin'} and $hash->{helper}{writePin} == 1 ) {
+    if( $respstate eq 'ok' and ($gattCmd eq 'write' or (defined($hash->{tempListsHandleQueue}) and scalar(@{$hash->{tempListsHandleQueue}}) > 0)) and $handle ne $gatttChar{AttrVal($name,'model','')}{'pin'} and $hash->{helper}{writePin} == 1 ) {
     
         if( $gattCmd eq 'write' ) {
             readingsBeginUpdate($hash);
@@ -595,14 +595,14 @@ sub CometBlueBTLE_ExecGatttool_Done($) {
             readingsEndUpdate($hash,1);
         }
         
-        $hash->{helper}{paramGatttool}{handle} = pop( @{$hash->{tempListsHandleQueue}} ) if( defined($hash->{actionQueue}) and scalar(@{$hash->{actionQueue}}) > 0 );
+        $hash->{helper}{paramGatttool}{handle} = pop( @{$hash->{tempListsHandleQueue}} ) if( defined($hash->{tempListsHandleQueue}) and scalar(@{$hash->{tempListsHandleQueue}}) > 0 );
         
-        return CometBlueBTLE_CreateParamGatttool($hash,'read',$hash->{helper}{paramGatttool}{handle}) if( defined($hash->{actionQueue}) and scalar(@{$hash->{actionQueue}}) == 0 );
-        CometBlueBTLE_CreateParamGatttool($hash,'read',$hash->{helper}{paramGatttool}{handle}) if( defined($hash->{actionQueue}) and scalar(@{$hash->{actionQueue}}) > 0 );
+        return CometBlueBTLE_CreateParamGatttool($hash,'read',$hash->{helper}{paramGatttool}{handle}) if( defined($hash->{tempListsHandleQueue}) and scalar(@{$hash->{tempListsHandleQueue}}) == 0 );
+        CometBlueBTLE_CreateParamGatttool($hash,'read',$hash->{helper}{paramGatttool}{handle}) if( defined($hash->{tempListsHandleQueue}) and scalar(@{$hash->{tempListsHandleQueue}}) > 0 );
     }
     
     elsif( $respstate eq 'ok' and $gattCmd eq 'write' and $handle eq $gatttChar{AttrVal($name,'model','')}{'pin'} and $hash->{helper}{writePin} == 1 ) {
-        $hash->{helper}{paramGatttool}{handle} = pop( @{$hash->{tempListsHandleQueue}} ) if( defined($hash->{actionQueue}) and scalar(@{$hash->{actionQueue}}) > 0 );
+        $hash->{helper}{paramGatttool}{handle} = pop( @{$hash->{tempListsHandleQueue}} ) if( defined($hash->{tempListsHandleQueue}) and scalar(@{$hash->{tempListsHandleQueue}}) > 0 );
         
         return CometBlueBTLE_CreateParamGatttool($hash,$hash->{helper}{paramGatttool}{mod},$hash->{helper}{paramGatttool}{handle})
         if($handle ne $gatttChar{AttrVal($name,'model','')}{'payload'} and $hash->{helper}{paramGatttool}{mod} eq 'read');
@@ -614,7 +614,7 @@ sub CometBlueBTLE_ExecGatttool_Done($) {
     }
 
 
-    $hash->{helper}{writePin} = 0 if( defined($hash->{actionQueue}) and scalar(@{$hash->{actionQueue}}) == 0 );
+    $hash->{helper}{writePin} = 0 if( defined($hash->{tempListsHandleQueue}) and scalar(@{$hash->{tempListsHandleQueue}}) == 0 );
 
     my $decode_json =   eval{decode_json($json_notification)};
     if($@){
@@ -681,7 +681,7 @@ sub CometBlueBTLE_ProcessingNotification($@) {
         
         $readings = CometBlueBTLE_HandleDevicename($hash,$notification);
     
-    } elsif( defined($hash->{actionQueue}) and scalar(@{$hash->{actionQueue}}) > 0 ) {
+    } elsif( defined($hash->{tempListsHandleQueue}) and scalar(@{$hash->{tempListsHandleQueue}}) > 0 ) {
         ### templisten abrufen
         my $i   = 0;
         foreach (split(',',$gatttChar{AttrVal($name,'model','')}{'tempLists'})) {
