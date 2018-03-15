@@ -110,7 +110,7 @@ sub CometBlueBTLE_CallBattery_UpdateTimeAge($);
 sub CometBlueBTLE_CreateDevicenameHEX($);
 sub CometBlueBTLE_CreatePayloadString($$$);
 sub CometBlueBTLE_ConvertPinToHexLittleEndian($);
-sub CometBlueBTLE_CmdlinePreventGrepFalsePositive($)
+sub CometBlueBTLE_CmdlinePreventGrepFalsePositive($);
 
 sub CometBlueBTLE_HandlePayload($$);
 sub CometBlueBTLE_HandleBattery($$);
