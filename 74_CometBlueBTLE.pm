@@ -43,15 +43,19 @@
 
 package main;
 
+my $missingModul = "";
+
 use strict;
 use warnings;
 use POSIX;
 
-use JSON;
-use Blocking;
+eval "use JSON;1" or $missingModul .= "JSON ";
+eval "use Blocking;1" or $missingModul .= "Blocking ";
 
 
-my $version = "0.1.31";
+
+
+my $version = "0.1.39";
 
 
 
@@ -61,8 +65,9 @@ my %gatttChar = (
                             'tempLists' => '0x29,0x2b,0x1f,0x21,0x23,0x25,0x27'},
         Sygonix         => {'devicename' => '0x3', 'battery' => '0x41', 'payload' => '0x3f', 'firmware' => '0x18', 'pin' => '0x47', 'date' => '0x1d',
                             'tempLists' => '0x29,0x2b,0x1f,0x21,0x23,0x25,0x27'},
-        SilverCrest     => {'devicename' => '0x3', 'battery' => '0x3f', 'payload' => '0x3d', 'firmware' => '0x18', 'pin' => '0x48'},
-        THERMyBlue      => {'devicename' => '0x3', 'battery' => '0x3f', 'payload' => '0x3d', 'firmware' => '0x18', 'pin' => '0x48'}
+        SilverCrest     => {'devicename' => '0x3', 'battery' => '0x3f', 'payload' => '0x3d', 'firmware' => '0x18', 'pin' => '0x48'},    # TODO determine tempLists
+        THERMyBlue      => {'devicename' => '0x3', 'battery' => '0x3f', 'payload' => '0x3d', 'firmware' => '0x18', 'pin' => '0x48', 'date' => '0x1b',
+                            'tempLists' => '0x27,0x29,0x1d,0x1f,0x21,0x23,0x25'}
     );
     
 my %winOpnSensitivity = ( 
@@ -99,12 +104,13 @@ sub CometBlueBTLE_WriteReadings($$);
 sub CometBlueBTLE_ProcessingErrors($$);
 sub CometBlueBTLE_encodeJSON($);
 
-sub CometBlueBTLE_CallBattery_IsUpdateTimeAgeToOld($$);
+sub CometBlueBTLE_CallBattery_IsUpdateTimeAgeTooOld($$);
 sub CometBlueBTLE_CallBattery_Timestamp($);
 sub CometBlueBTLE_CallBattery_UpdateTimeAge($);
 sub CometBlueBTLE_CreateDevicenameHEX($);
 sub CometBlueBTLE_CreatePayloadString($$$);
 sub CometBlueBTLE_ConvertPinToHexLittleEndian($);
+sub CometBlueBTLE_CmdlinePreventGrepFalsePositive($)
 
 sub CometBlueBTLE_HandlePayload($$);
 sub CometBlueBTLE_HandleBattery($$);
@@ -151,6 +157,7 @@ sub CometBlueBTLE_Define($$) {
     my @a = split( "[ \t][ \t]*", $def );
     
     return "too few parameters: define <name> CometBlueBTLE <BTMAC>" if( @a != 3 );
+    return "Cannot define CometBlueBTLE device. Perl modul ${missingModul}is missing." if ( $missingModul );
 
 
     my $name                                = $a[0];
@@ -297,7 +304,7 @@ sub CometBlueBTLE_stateRequest($) {
         if( ReadingsVal($name,'firmware','none') ne 'none' ) {
         
             return CometBlueBTLE_CreateParamGatttool($hash,'read',$gatttChar{AttrVal($name,'model','')}{'battery'})
-            if( CometBlueBTLE_CallBattery_IsUpdateTimeAgeToOld($hash,$CallBatteryAge{AttrVal($name,'BatteryFirmwareAge','24h')}) );
+            if( CometBlueBTLE_CallBattery_IsUpdateTimeAgeTooOld($hash,$CallBatteryAge{AttrVal($name,'BatteryFirmwareAge','24h')}) );
 
             CometBlueBTLE_CreateParamGatttool($hash,'read',$gatttChar{AttrVal($name,'model','')}{'payload'}) if( $hash->{helper}{writePin} == 0 );
             
@@ -335,41 +342,41 @@ sub CometBlueBTLE_Set($$@) {
     my $value;
     
     if( $cmd eq 'desired-temp' ) {
-        return 'CometBlueBTLE: desired-temp requires <temperature> in celsius degrees as additional parameter' if(@args < 1);
+        return 'CometBlueBTLE: desired-temp requires <temperature> in degrees celsius as additional parameter' if(@args < 1);
         #return 'CometBlueBTLE: desired-temp supports temperatures from 6.0 - 28.0 degrees' if($args[0]<6.0 or $args[0]>28.0);
         
         $handle = $gatttChar{AttrVal($name,'model','')}{'payload'};
         $value = join( " ", @args);
         
     } elsif( $cmd eq 'tempEco' ) {
-        return 'CometBlueBTLE: tempEco requires <temperature> in celsius degrees as additional parameter' if(@args < 1);
-        return 'CometBlueBTLE: tempEco supports temperatures from 6.0 - 28.0 degrees' if($args[0]<12.0 or $args[0]>23.0);
+        return 'CometBlueBTLE: tempEco requires <temperature> in degrees celsius as additional parameter' if(@args < 1);
+        return 'CometBlueBTLE: tempEco supports temperatures from 6.0 to 28.0 degrees' if($args[0]<12.0 or $args[0]>23.0);
     
         $handle = $gatttChar{AttrVal($name,'model','')}{'payload'};
         $value = join( " ", @args);
         
     } elsif( $cmd eq 'tempComfort' ) {
-        return 'CometBlueBTLE: tempComfort requires <temperature> in celsius degrees as additional parameter' if(@args < 1);
-        return 'CometBlueBTLE: tempComfort supports temperatures from 6.0 - 28.0 degrees' if($args[0]<12.0 or $args[0]>23.0);
+        return 'CometBlueBTLE: tempComfort requires <temperature> in degrees celsius as additional parameter' if(@args < 1);
+        return 'CometBlueBTLE: tempComfort supports temperatures from 6.0 to 28.0 degrees' if($args[0]<12.0 or $args[0]>23.0);
     
         $handle = $gatttChar{AttrVal($name,'model','')}{'payload'};
         $value = join( " ", @args);
         
     } elsif( $cmd eq 'tempOffset' ) {
-        return 'CometBlueBTLE: tempOffset requires a additional parameter' if(@args < 1);
-        return 'CometBlueBTLE: tempOffset supports values from -5.0 - 5.0' if($args[0] < -5.0 or $args[0] > 5.0);
+        return 'CometBlueBTLE: tempOffset requires an additional parameter' if(@args < 1);
+        return 'CometBlueBTLE: tempOffset supports values from -5.0 to 5.0' if($args[0] < -5.0 or $args[0] > 5.0);
     
         $handle = $gatttChar{AttrVal($name,'model','')}{'payload'};
         $value = join( " ", @args);
         
     } elsif( $cmd eq 'winOpnSensitivity' ) {
-        return 'CometBlueBTLE: winOpnSensitivity requires a additional parameter high,medium or low' if(@args < 1 or $args[0] ne 'high' or $args[0] ne 'medium' or $args[0] ne 'low');
+        return 'CometBlueBTLE: winOpnSensitivity requires an additional parameter high, medium or low' if(@args < 1 or $args[0] ne 'high' or $args[0] ne 'medium' or $args[0] ne 'low');
     
         $handle = $gatttChar{AttrVal($name,'model','')}{'payload'};
         $value = join( " ", @args);
         
     } elsif( $cmd eq 'winOpnPeriod' ) {
-        return 'CometBlueBTLE: winOpnSensitivity requires a additional parameter in minutes' if(@args < 1);
+        return 'CometBlueBTLE: winOpnSensitivity requires an additional parameter in minutes' if(@args < 1);
     
         $handle = $gatttChar{AttrVal($name,'model','')}{'payload'};
         $value = join( " ", @args);
@@ -422,11 +429,11 @@ sub CometBlueBTLE_Get($$@) {
                 unshift( @{$hash->{tempListsHandleQueue}}, $_ );
             }
         }
-        
+
         $handle = pop( @{$hash->{tempListsHandleQueue}} );
         
     } else {
-        my $list = "temperatures:noArg devicename:noArg firmware:noArg";
+        my $list = "temperatures:noArg devicename:noArg firmware:noArg tempLists:noArg";
         return "Unknown argument $cmd, choose one of $list";
     }
 
@@ -446,9 +453,10 @@ sub CometBlueBTLE_CreateParamGatttool($@) {
 
     Log3 $name, 4, "CometBlueBTLE ($name) - Run CreateParamGatttool with mod: $mod";
     Log3 $name, 4, "CometBlueBTLE ($name) - Run CreateParamGatttool with mod: $mod : $handle : $value" if( defined($value) );
+    Log3 $name, 5, "CometBlueBTLE ($name) - Noch in Queue nach pop: " . scalar(@{$hash->{tempListsHandleQueue}});
     
     if( $hash->{helper}{writePin} == 0 ) {
-    
+        Log3 $name, 3, "CometBlueBTLE ($name) - CreateParamGatttool erstes if";
         $hash->{helper}{writePin} = 1;
         $hash->{helper}{paramGatttool}{mod}     = $mod;
         $hash->{helper}{paramGatttool}{handle}  = $handle;
@@ -461,6 +469,7 @@ sub CometBlueBTLE_CreateParamGatttool($@) {
         Log3 $name, 4, "CometBlueBTLE ($name) - Read CometBlueBTLE_ExecGatttool_Run $name|$mac|$mod|$handle";
 
     } elsif( $mod eq 'read' ) {
+        Log3 $name, 3, "CometBlueBTLE ($name) - CreateParamGatttool zweites if";
         $hash->{helper}{RUNNING_PID} = BlockingCall("CometBlueBTLE_ExecGatttool_Run", $name."|".$mac."|".$mod."|".$handle, "CometBlueBTLE_ExecGatttool_Done", 60, "CometBlueBTLE_ExecGatttool_Aborted", $hash) unless( exists($hash->{helper}{RUNNING_PID}) );
         
         readingsSingleUpdate($hash,"state","read sensor data",1);
@@ -468,6 +477,7 @@ sub CometBlueBTLE_CreateParamGatttool($@) {
         Log3 $name, 4, "CometBlueBTLE ($name) - Read CometBlueBTLE_ExecGatttool_Run $name|$mac|$mod|$handle";
 
     } elsif( $mod eq 'write' ) {
+        Log3 $name, 3, "CometBlueBTLE ($name) - CreateParamGatttool drittes if";
         $hash->{helper}{RUNNING_PID} = BlockingCall("CometBlueBTLE_ExecGatttool_Run", $name."|".$mac."|".$mod."|".$handle."|".$value, "CometBlueBTLE_ExecGatttool_Done", 60, "CometBlueBTLE_ExecGatttool_Aborted", $hash) unless( exists($hash->{helper}{RUNNING_PID}) );
         
         readingsSingleUpdate($hash,"state","write sensor data",1);
@@ -502,8 +512,13 @@ sub CometBlueBTLE_ExecGatttool_Run($) {
         while($wait) {
         
             my $grepGatttool;
-            $grepGatttool = qx(ps ax| grep -E \'gatttool -i $hci -b $mac\' | grep -v grep) if($sshHost eq 'none');
-            $grepGatttool = qx(ssh $sshHost 'ps ax| grep -E "gatttool -i $hci -b $mac" | grep -v grep') if($sshHost ne 'none');
+            my $gatttoolCmdlineStaticEscaped = CometBlueBTLE_CmdlinePreventGrepFalsePositive("gatttool -i $hci -b $mac");
+            
+            #$grepGatttool = qx(ps ax| grep -E \'gatttool -i $hci -b $mac\' | grep -v grep) if($sshHost eq 'none');
+            #$grepGatttool = qx(ssh $sshHost 'ps ax| grep -E "gatttool -i $hci -b $mac" | grep -v grep') if($sshHost ne 'none');
+            
+            $grepGatttool = qx(ps ax| grep -E \'$gatttoolCmdlineStaticEscaped\') if($sshHost eq 'none');
+            $grepGatttool = qx(ssh $sshHost 'ps ax| grep -E "$gatttoolCmdlineStaticEscaped"') if($sshHost ne 'none');
 
             if(not $grepGatttool =~ /^\s*$/) {
                 Log3 $name, 4, "CometBlueBTLE ($name) - ExecGatttool_Run: another gatttool process is running. waiting...";
@@ -602,8 +617,7 @@ sub CometBlueBTLE_ExecGatttool_Done($) {
     }
     
     elsif( $respstate eq 'ok' and $gattCmd eq 'write' and $handle eq $gatttChar{AttrVal($name,'model','')}{'pin'} and $hash->{helper}{writePin} == 1 ) {
-        $hash->{helper}{paramGatttool}{handle} = pop( @{$hash->{tempListsHandleQueue}} ) if( defined($hash->{tempListsHandleQueue}) and scalar(@{$hash->{tempListsHandleQueue}}) > 0 );
-        
+
         return CometBlueBTLE_CreateParamGatttool($hash,$hash->{helper}{paramGatttool}{mod},$hash->{helper}{paramGatttool}{handle})
         if($handle ne $gatttChar{AttrVal($name,'model','')}{'payload'} and $hash->{helper}{paramGatttool}{mod} eq 'read');
         
@@ -656,9 +670,10 @@ sub CometBlueBTLE_ProcessingNotification($@) {
     
     
     Log3 $name, 4, "CometBlueBTLE ($name) - ProcessingNotification";
+    Log3 $name, 3, "CometBlueBTLE ($name) - ProcessingNotification: handle " . $handle . " - Noch in Queue: " . scalar(@{$hash->{tempListsHandleQueue}});
 
     if( $handle eq $gatttChar{AttrVal($name,'model','')}{'battery'} ) {
-        ### Flower Sens - Read Firmware and Battery Data
+        ### Read Firmware and Battery Data
         Log3 $name, 5, "CometBlueBTLE ($name) - ProcessingNotification: handle $gatttChar{AttrVal($name,'model','')}{'battery'}";
         
         $readings = CometBlueBTLE_HandleBattery($hash,$notification);
@@ -682,11 +697,12 @@ sub CometBlueBTLE_ProcessingNotification($@) {
         $readings = CometBlueBTLE_HandleDevicename($hash,$notification);
     
     } elsif( defined($hash->{tempListsHandleQueue}) and scalar(@{$hash->{tempListsHandleQueue}}) > 0 ) {
+        Log3 $name, 3, "CometBlueBTLE ($name) - ProcessingNotification: $notification - Noch in Queue: " . scalar(@{$hash->{tempListsHandleQueue}});
         ### templisten abrufen
         my $i   = 0;
         foreach (split(',',$gatttChar{AttrVal($name,'model','')}{'tempLists'})) {
             if( $handle eq $_ ) {
-                Log3 $name, 5, "CometBlueBTLE ($name) - ProcessingNotification: handle $_";
+                Log3 $name, 3, "CometBlueBTLE ($name) - ProcessingNotification in der Schleife: handle " . $_ ." und dayOfWeek: " . $i;
                 $readings = CometBlueBTLE_HandleTempLists($hash,$_,$i,$notification);
             }
             
@@ -796,22 +812,50 @@ sub CometBlueBTLE_HandleDevicename($$) {
 }
 
 sub CometBlueBTLE_HandleTempLists($@) {
-    ### Read templist Data
+    ### Read tempList Data
     my ($hash,$handle,$dayOfWeek,$notification) = @_;
 
     my $name                                    = $hash->{NAME};
     my %readings;
-    $notification =~ s/\s+//g;
+    my %days = (0 => 'Sat', 1 => 'Sun', 2 => 'Mon', 3 => 'Tue', 4 => 'Wed', 5 => 'Thu', 6 => 'Fri');
     
     
-    Log3 $name, 5, "CometBlueBTLE ($name) - handle $handle";
+    Log3 $name, 3, "CometBlueBTLE ($name) - handle $handle - dayOfWeek: $dayOfWeek - Notification: $notification - Noch in Queue: " . scalar(@{$hash->{tempListsHandleQueue}});
     
     my @tempList  = split(" ",$notification);
-    
-    $readings{'0_tempListSat'} = substr(hex("0x".$tempList[0])*10/6,0,2) . ':' . int(substr(hex("0x".$tempList[0])*10/6,2)/10*60+0.5) if($dayOfWeek == 0);
-    
-    
+    my $i = 0;
+    my $hour;
+    my $min;
+
+    foreach(@tempList) {
+        ### Berechnung Stunden
+        if( hex("0x".$tempList[$i])*10/6 < 100 ) {
+            $hour = '0'.substr(hex("0x".$tempList[$i])*10/6,0,1);
+        } elsif( hex("0x".$tempList[$i])*10/6 > 99 ) {
+            $hour = substr(hex("0x".$tempList[$i])*10/6,0,2);
+        }
+
+        ### Berechnung Minuten
+        if( hex("0x".$tempList[$i])*10/6 == 0 or (hex("0x".$tempList[$i])*10/6) =~ /^[1-9]0$/ ) {
+            $min = '00';
+        } elsif( int(hex("0x".$tempList[$i])*10/6) == hex("0x".$tempList[$i])*10/6 and hex("0x".$tempList[$i])*10/6 > 0 and hex("0x".$tempList[$i])*10/6 < 100 ) {
+            $min = int(substr(hex("0x".$tempList[$i])*10/6,1)/10*60+0.5);
+        } elsif( int(hex("0x".$tempList[$i])*10/6) == hex("0x".$tempList[$i])*10/6 ) {
+            $min = int(substr(hex("0x".$tempList[$i])*10/6,2)/10*60+0.5).'0';
+        } elsif( int(hex("0x".$tempList[$i])*10/6) != hex("0x".$tempList[$i])*10/6 and hex("0x".$tempList[$i])*10/6 > 99 ) {
+            $min = int(substr(hex("0x".$tempList[$i])*10/6,2)/10*60+0.5);
+        } elsif( int(hex("0x".$tempList[$i])*10/6) != hex("0x".$tempList[$i])*10/6 and hex("0x".$tempList[$i])*10/6 < 100 ) {
+            $min = int(substr(hex("0x".$tempList[$i])*10/6,1)/10*60+0.5);
+        }
+
+        $readings{$dayOfWeek.'_tempList'.$days{$dayOfWeek}} = $hour.':'.$min if($i == 0);
+        $readings{$dayOfWeek.'_tempList'.$days{$dayOfWeek}} = $readings{$dayOfWeek.'_tempList'.$days{$dayOfWeek}} . ' ' . $hour.':'.$min if($i > 0);
+
+        $i++;
+    }
+
     $hash->{helper}{CallBattery} = 0;
+
     return \%readings;
 }
 
@@ -890,7 +934,7 @@ sub CometBlueBTLE_CallBattery_UpdateTimeAge($) {
     return $UpdateTimeAge;
 }
 
-sub CometBlueBTLE_CallBattery_IsUpdateTimeAgeToOld($$) {
+sub CometBlueBTLE_CallBattery_IsUpdateTimeAgeTooOld($$) {
 
     my ($hash,$maxAge)    = @_;;
     
@@ -943,6 +987,18 @@ sub CometBlueBTLE_CreatePayloadString($$$) {
     
     return sprintf('%.2x',ReadingsVal($name,'measured-temp',0)*2) . sprintf('%.2x',ReadingsVal($name,'desired-temp',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempEco',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempComfort',0)*2) . sprintf('%.2x',ReadingsVal($name,'tempOffset',0)*2+(ReadingsVal($name,'tempOffset',0) < 0 ? 256 : 0)) . sprintf('%.2x',$winOpnSensitivity{'Sensitivity'}{ReadingsVal($name,'winOpnSensitivity',0)}) . sprintf('%.2x',$value) if( $setCmd eq 'winOpnPeriod' );
 
+}
+
+sub CometBlueBTLE_CmdlinePreventGrepFalsePositive($) {
+# https://stackoverflow.com/questions/9375711/more-elegant-ps-aux-grep-v-grep
+# Given abysmal (since external-command-based) performance in the first place, we'd better
+# avoid an *additional* grep process plus pipe...
+
+    my $cmdline = shift;
+
+  
+    $cmdline =~ s/(.)(.*)/[$1]$2/;
+    return $cmdline;
 }
 
 
