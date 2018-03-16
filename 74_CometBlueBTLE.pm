@@ -55,7 +55,7 @@ eval "use Blocking;1" or $missingModul .= "Blocking ";
 
 
 
-my $version = "0.1.39";
+my $version = "0.1.40";
 
 
 
@@ -65,7 +65,7 @@ my %gatttChar = (
                             'tempLists' => '0x29,0x2b,0x1f,0x21,0x23,0x25,0x27'},
         Sygonix         => {'devicename' => '0x3', 'battery' => '0x41', 'payload' => '0x3f', 'firmware' => '0x18', 'pin' => '0x47', 'date' => '0x1d',
                             'tempLists' => '0x29,0x2b,0x1f,0x21,0x23,0x25,0x27'},
-        SilverCrest     => {'devicename' => '0x3', 'battery' => '0x3f', 'payload' => '0x3d', 'firmware' => '0x18', 'pin' => '0x48'},    # TODO determine tempLists
+        SilverCrest     => {'devicename' => '0x3', 'battery' => '0x3f', 'payload' => '0x3d', 'firmware' => '0x18', 'pin' => '0x48'},
         THERMyBlue      => {'devicename' => '0x3', 'battery' => '0x3f', 'payload' => '0x3d', 'firmware' => '0x18', 'pin' => '0x48', 'date' => '0x1b',
                             'tempLists' => '0x27,0x29,0x1d,0x1f,0x21,0x23,0x25'}
     );
