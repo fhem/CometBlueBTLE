@@ -433,7 +433,7 @@ sub CometBlueBTLE_Get($$@) {
         $handle = pop( @{$hash->{tempListsHandleQueue}} );
         
     } else {
-        my $list = "temperatures:noArg devicename:noArg firmware:noArg tempLists:noArg";
+        my $list = "temperatures:noArg devicename:noArg firmware:noArg";    # tempLists:noArg";
         return "Unknown argument $cmd, choose one of $list";
     }
 
@@ -728,7 +728,7 @@ sub CometBlueBTLE_HandleBattery($$) {
     $notification =~ s/\s+//g;
 
     $readings{'batteryLevel'}   = hex("0x".$notification);
-    $readings{'battery'}        = (hex("0x".$notification) > 15?"ok":"low");
+    $readings{'battery'}        = (hex("0x".$notification) > 15 ? "ok" : "low");
 
     $hash->{helper}{CallBattery} = 1;
     CometBlueBTLE_CallBattery_Timestamp($hash);
