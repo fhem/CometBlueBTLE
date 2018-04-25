@@ -25,6 +25,7 @@
 #
 ###############################################################################
 
+## Info https://www.torsten-traenkner.de/wissen/smarthome/heizung.php
 ## Die folgenden Modelle sind identisch. Man kann sich das günstigste Modell auswählen.
 ##
 ## Name                	Preis      	Vertrieb über
@@ -55,19 +56,19 @@ eval "use Blocking;1" or $missingModul .= "Blocking ";
 
 
 
-my $version = "0.1.41";
+my $version = "0.1.45";
 
 
 
 
 my %gatttChar = (
         CometBlue       => {'devicename' => '0x3', 'battery' => '0x41', 'payload' => '0x3f', 'firmware' => '0x18', 'pin' => '0x47', 'date' => '0x1d',
-                            'tempLists' => '0x29,0x2b,0x1f,0x21,0x23,0x25,0x27'},
+                            'tempLists' => '0x29,0x2b,0x1f,0x21,0x23,0x25,0x27,end'},
         Sygonix         => {'devicename' => '0x3', 'battery' => '0x41', 'payload' => '0x3f', 'firmware' => '0x18', 'pin' => '0x47', 'date' => '0x1d',
-                            'tempLists' => '0x29,0x2b,0x1f,0x21,0x23,0x25,0x27'},
+                            'tempLists' => '0x29,0x2b,0x1f,0x21,0x23,0x25,0x27,end'},
         SilverCrest     => {'devicename' => '0x3', 'battery' => '0x3f', 'payload' => '0x3d', 'firmware' => '0x18', 'pin' => '0x48'},
         THERMyBlue      => {'devicename' => '0x3', 'battery' => '0x3f', 'payload' => '0x3d', 'firmware' => '0x18', 'pin' => '0x48', 'date' => '0x1b',
-                            'tempLists' => '0x27,0x29,0x1d,0x1f,0x21,0x23,0x25'}
+                            'tempLists' => '0x27,0x29,0x1d,0x1f,0x21,0x23,0x25,end'}
     );
     
 my %winOpnSensitivity = ( 
@@ -325,9 +326,9 @@ sub CometBlueBTLE_stateRequestTimer($) {
     
     my $name        = $hash->{NAME};
 
-        
-    CometBlueBTLE_stateRequest($hash) if( $init_done );
     
+    RemoveInternalTimer($hash);
+    CometBlueBTLE_stateRequest($hash) if( $init_done );
     InternalTimer( gettimeofday()+$hash->{INTERVAL}+int(rand(60)), "CometBlueBTLE_stateRequestTimer", $hash );
     
     Log3 $name, 4, "CometBlueBTLE ($name) - stateRequestTimer: Call Request Timer";
@@ -342,9 +343,9 @@ sub CometBlueBTLE_Set($$@) {
     my $handle;
     my $value;
     
-    if( $cmd eq 'desired-temp' ) {
+    if( $cmd eq 'desired-temp' or $cmd eq 'controlManu' ) {
         return 'CometBlueBTLE: desired-temp requires <temperature> in degrees celsius as additional parameter' if(@args < 1);
-        #return 'CometBlueBTLE: desired-temp supports temperatures from 6.0 - 28.0 degrees' if($args[0]<6.0 or $args[0]>28.0);
+        #return 'CometBlueBTLE: desired-temp supports temperatures from 6.0 - 28.0 degrees' if($args[0]<8.0 or $args[0]>28.0 or $args[0] ne 'on' or $args[0] ne 'off');
         
         $handle = $gatttChar{AttrVal($name,'model','')}{'payload'};
         $value = join( " ", @args);
@@ -389,7 +390,8 @@ sub CometBlueBTLE_Set($$@) {
         return;
     
     } else {
-        my  $list = "desired-temp:on,off,Eco,Comfort,8.5,9.0,9.5,10.0,10.5,11.0,11.5,12.0,12.5,13.0,13.5,14.0,14.5,15.0,15.5,16.0,16.5,17.0,17.5,18.0,18.5,19.0,19.5,20.0,20.5,21.0,21.5,22.0,22.5,23.0,23.5,24.0,24.5,25.0,25.5,26.0,26.5,27.0,27.5";
+        my  $list = "desired-temp:on,off,Eco,Comfort,8.0,8.5,9.0,9.5,10.0,10.5,11.0,11.5,12.0,12.5,13.0,13.5,14.0,14.5,15.0,15.5,16.0,16.5,17.0,17.5,18.0,18.5,19.0,19.5,20.0,20.5,21.0,21.5,22.0,22.5,23.0,23.5,24.0,24.5,25.0,25.5,26.0,26.5,27.0,27.5,28.0";
+            $list .= " controlManu:on,off,8.0,8.5,9.0,9.5,10.0,10.5,11.0,11.5,12.0,12.5,13.0,13.5,14.0,14.5,15.0,15.5,16.0,16.5,17.0,17.5,18.0,18.5,19.0,19.5,20.0,20.5,21.0,21.5,22.0,22.5,23.0,23.5,24.0,24.5,25.0,25.5,26.0,26.5,27.0,27.5,28.0";
             $list .= " tempEco:12.0,12.5,13.0,13.5,14.0,14.5,15.0,15.5,16.0,16.5,17.0,17.5,18.0,18.5,19.0,19.5,20.0,20.5,21.0,21.5,22.0,22.5,23.0";
             $list .= " tempComfort:12.0,12.5,13.0,13.5,14.0,14.5,15.0,15.5,16.0,16.5,17.0,17.5,18.0,18.5,19.0,19.5,20.0,20.5,21.0,21.5,22.0,22.5,23.0";
             $list .= " tempOffset:-5,-4.5,-4,-3.5,-3,-2.5,-2,-1.5,-1,-0.5,0,0.5,1,1.5,2,2.5,3,3.5,4,4.5,5 winOpnSensitivity:high,medium,low winOpnPeriod:slider,5,5,30";
@@ -440,7 +442,7 @@ sub CometBlueBTLE_Get($$@) {
         $handle = pop( @{$hash->{tempListsHandleQueue}} );
         
     } else {
-        my $list = "temperatures:noArg devicename:noArg firmware:noArg";    # tempLists:noArg";
+        my $list = "temperatures:noArg devicename:noArg firmware:noArg tempLists:noArg";
         return "Unknown argument $cmd, choose one of $list";
     }
 
@@ -617,10 +619,7 @@ sub CometBlueBTLE_ExecGatttool_Done($) {
             readingsEndUpdate($hash,1);
         }
         
-        $hash->{helper}{paramGatttool}{handle} = pop( @{$hash->{tempListsHandleQueue}} ) if( defined($hash->{tempListsHandleQueue}) and scalar(@{$hash->{tempListsHandleQueue}}) > 0 );
-        
         return CometBlueBTLE_CreateParamGatttool($hash,'read',$hash->{helper}{paramGatttool}{handle}) if( defined($hash->{tempListsHandleQueue}) and scalar(@{$hash->{tempListsHandleQueue}}) == 0 );
-        CometBlueBTLE_CreateParamGatttool($hash,'read',$hash->{helper}{paramGatttool}{handle}) if( defined($hash->{tempListsHandleQueue}) and scalar(@{$hash->{tempListsHandleQueue}}) > 0 );
     }
     
     elsif( $respstate eq 'ok' and $gattCmd eq 'write' and $handle eq $gatttChar{AttrVal($name,'model','')}{'pin'} and $hash->{helper}{writePin} == 1 ) {
@@ -634,9 +633,6 @@ sub CometBlueBTLE_ExecGatttool_Done($) {
         return CometBlueBTLE_stateRequest($hash) if($handle eq $gatttChar{AttrVal($name,'model','')}{'payload'} and $hash->{helper}{paramGatttool}{mod} eq 'read');
     }
 
-
-    $hash->{helper}{writePin} = 0 if( defined($hash->{tempListsHandleQueue}) and scalar(@{$hash->{tempListsHandleQueue}}) == 0 );
-
     my $decode_json =   eval{decode_json($json_notification)};
     if($@){
         Log3 $name, 3, "CometBlueBTLE ($name) - ExecGatttool_Done: JSON error while request: $@";
@@ -649,6 +645,8 @@ sub CometBlueBTLE_ExecGatttool_Done($) {
     } else {
         CometBlueBTLE_ProcessingErrors($hash,$decode_json->{gtResult});
     }
+    
+    $hash->{helper}{writePin} = 0 if( defined($hash->{tempListsHandleQueue}) and scalar(@{$hash->{tempListsHandleQueue}}) == 0 );
 }
 
 sub CometBlueBTLE_ExecGatttool_Aborted($) {
@@ -715,8 +713,11 @@ sub CometBlueBTLE_ProcessingNotification($@) {
             
             $i++;
         }
+        
+        $hash->{helper}{paramGatttool}{handle} = pop( @{$hash->{tempListsHandleQueue}} ) if( defined($hash->{tempListsHandleQueue}) and scalar(@{$hash->{tempListsHandleQueue}}) > 0 );
+        
+        CometBlueBTLE_CreateParamGatttool($hash,'read',$hash->{helper}{paramGatttool}{handle}) if( $hash->{helper}{paramGatttool}{handle} ne 'end' );
     }
-
 
     CometBlueBTLE_WriteReadings($hash,$readings);
 }
@@ -767,7 +768,15 @@ sub CometBlueBTLE_HandlePayload($$) {
 
 
     $readings{'measured-temp'}      = hex("0x".$payload[0])/2;
-    $readings{'desired-temp'}       = hex("0x".$payload[1])/2;
+
+    if( hex("0x".$payload[1])/2 == 7.5 ) {
+        $readings{'desired-temp'}       = 'off';
+    } elsif( hex("0x".$payload[1])/2 == 28.5 ) {
+        $readings{'desired-temp'}       = 'on';
+    } else {
+        $readings{'desired-temp'}       = hex("0x".$payload[1])/2;
+    }
+
     $readings{'tempEco'}            = hex("0x".$payload[2])/2;
     $readings{'tempComfort'}        = hex("0x".$payload[3])/2;
     
@@ -902,6 +911,7 @@ sub CometBlueBTLE_ProcessingErrors($$) {
     $readings{'lastGattError'} = $notification;
     
     CometBlueBTLE_WriteReadings($hash,\%readings);
+    $hash->{helper}{writePin} = 0 if( defined($hash->{tempListsHandleQueue}) and scalar(@{$hash->{tempListsHandleQueue}}) > 0 );
 }
 
 #### my little Helper
@@ -977,8 +987,8 @@ sub CometBlueBTLE_CreatePayloadString($$$) {
     my $name                    = $hash->{NAME};
 
 
-    $value = 00 if($value eq 'off');
-    $value = 28 if($value eq 'on');
+    $value = 7.5 if($value eq 'off');
+    $value = 28.5 if($value eq 'on');
     $value = ReadingsVal($name,'tempComfort',0) if($value eq 'Comfort');
     $value = ReadingsVal($name,'tempEco',0) if($value eq 'Eco');
 
