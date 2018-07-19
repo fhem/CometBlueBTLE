@@ -56,7 +56,7 @@ eval "use Blocking;1" or $missingModul .= "Blocking ";
 
 
 
-my $version = "0.1.45";
+my $version = "0.1.99";
 
 
 
@@ -523,9 +523,6 @@ sub CometBlueBTLE_ExecGatttool_Run($) {
             my $grepGatttool;
             my $gatttoolCmdlineStaticEscaped = CometBlueBTLE_CmdlinePreventGrepFalsePositive("gatttool -i $hci -b $mac");
             
-            #$grepGatttool = qx(ps ax| grep -E \'gatttool -i $hci -b $mac\' | grep -v grep) if($sshHost eq 'none');
-            #$grepGatttool = qx(ssh $sshHost 'ps ax| grep -E "gatttool -i $hci -b $mac" | grep -v grep') if($sshHost ne 'none');
-            
             $grepGatttool = qx(ps ax| grep -E \'$gatttoolCmdlineStaticEscaped\') if($sshHost eq 'none');
             $grepGatttool = qx(ssh $sshHost 'ps ax| grep -E "$gatttoolCmdlineStaticEscaped"') if($sshHost ne 'none');
 
@@ -735,8 +732,8 @@ sub CometBlueBTLE_HandleBattery($$) {
     #chomp($notification);
     $notification =~ s/\s+//g;
 
-    $readings{'batteryLevel'}   = hex("0x".$notification);
-    $readings{'battery'}        = (hex("0x".$notification) > 15 ? "ok" : "low");
+    $readings{'batteryPercent'}   = hex("0x".$notification);
+    $readings{'batteryState'}        = (hex("0x".$notification) > 15 ? "ok" : "low");
 
     $hash->{helper}{CallBattery} = 1;
     CometBlueBTLE_CallBattery_Timestamp($hash);
