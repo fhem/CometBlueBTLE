@@ -465,7 +465,7 @@ sub CometBlueBTLE_CreateParamGatttool($@) {
     Log3 $name, 5, "CometBlueBTLE ($name) - Noch in Queue nach pop: " . scalar(@{$hash->{tempListsHandleQueue}});
     
     if( $hash->{helper}{writePin} == 0 ) {
-        Log3 $name, 3, "CometBlueBTLE ($name) - CreateParamGatttool erstes if";
+        Log3 $name, 4, "CometBlueBTLE ($name) - CreateParamGatttool erstes if";
         $hash->{helper}{writePin} = 1;
         $hash->{helper}{paramGatttool}{mod}     = $mod;
         $hash->{helper}{paramGatttool}{handle}  = $handle;
@@ -478,7 +478,7 @@ sub CometBlueBTLE_CreateParamGatttool($@) {
         Log3 $name, 4, "CometBlueBTLE ($name) - Read CometBlueBTLE_ExecGatttool_Run $name|$mac|$mod|$handle";
 
     } elsif( $mod eq 'read' ) {
-        Log3 $name, 3, "CometBlueBTLE ($name) - CreateParamGatttool zweites if";
+        Log3 $name, 4, "CometBlueBTLE ($name) - CreateParamGatttool zweites if";
         $hash->{helper}{RUNNING_PID} = BlockingCall("CometBlueBTLE_ExecGatttool_Run", $name."|".$mac."|".$mod."|".$handle, "CometBlueBTLE_ExecGatttool_Done", 60, "CometBlueBTLE_ExecGatttool_Aborted", $hash) unless( exists($hash->{helper}{RUNNING_PID}) );
         
         readingsSingleUpdate($hash,"state","read sensor data",1);
@@ -486,7 +486,7 @@ sub CometBlueBTLE_CreateParamGatttool($@) {
         Log3 $name, 4, "CometBlueBTLE ($name) - Read CometBlueBTLE_ExecGatttool_Run $name|$mac|$mod|$handle";
 
     } elsif( $mod eq 'write' ) {
-        Log3 $name, 3, "CometBlueBTLE ($name) - CreateParamGatttool drittes if";
+        Log3 $name, 4, "CometBlueBTLE ($name) - CreateParamGatttool drittes if";
         $hash->{helper}{RUNNING_PID} = BlockingCall("CometBlueBTLE_ExecGatttool_Run", $name."|".$mac."|".$mod."|".$handle."|".$value, "CometBlueBTLE_ExecGatttool_Done", 60, "CometBlueBTLE_ExecGatttool_Aborted", $hash) unless( exists($hash->{helper}{RUNNING_PID}) );
         
         readingsSingleUpdate($hash,"state","write sensor data",1);
@@ -672,7 +672,7 @@ sub CometBlueBTLE_ProcessingNotification($@) {
     
     
     Log3 $name, 4, "CometBlueBTLE ($name) - ProcessingNotification";
-    Log3 $name, 3, "CometBlueBTLE ($name) - ProcessingNotification: handle " . $handle . " - Noch in Queue: " . scalar(@{$hash->{tempListsHandleQueue}});
+    Log3 $name, 4, "CometBlueBTLE ($name) - ProcessingNotification: handle " . $handle . " - Noch in Queue: " . scalar(@{$hash->{tempListsHandleQueue}});
 
     if( $handle eq $gatttChar{AttrVal($name,'model','')}{'battery'} ) {
         ### Read Firmware and Battery Data
@@ -699,12 +699,12 @@ sub CometBlueBTLE_ProcessingNotification($@) {
         $readings = CometBlueBTLE_HandleDevicename($hash,$notification);
     
     } elsif( defined($hash->{tempListsHandleQueue}) and scalar(@{$hash->{tempListsHandleQueue}}) > 0 ) {
-        Log3 $name, 3, "CometBlueBTLE ($name) - ProcessingNotification: $notification - Noch in Queue: " . scalar(@{$hash->{tempListsHandleQueue}});
+        Log3 $name, 4, "CometBlueBTLE ($name) - ProcessingNotification: $notification - Noch in Queue: " . scalar(@{$hash->{tempListsHandleQueue}});
         ### templisten abrufen
         my $i   = 0;
         foreach (split(',',$gatttChar{AttrVal($name,'model','')}{'tempLists'})) {
             if( $handle eq $_ ) {
-                Log3 $name, 3, "CometBlueBTLE ($name) - ProcessingNotification in der Schleife: handle " . $_ ." und dayOfWeek: " . $i;
+                Log3 $name, 4, "CometBlueBTLE ($name) - ProcessingNotification in der Schleife: handle " . $_ ." und dayOfWeek: " . $i;
                 $readings = CometBlueBTLE_HandleTempLists($hash,$_,$i,$notification);
             }
             
