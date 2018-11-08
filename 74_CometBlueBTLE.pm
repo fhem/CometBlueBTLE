@@ -41,7 +41,7 @@ package main;
 use strict;
 use warnings;
 
-my $version = "0.1.103";
+my $version = "0.2.0";
 
 sub CometBlueBTLE_Initialize($) {
 
