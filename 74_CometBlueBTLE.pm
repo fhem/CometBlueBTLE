@@ -36,13 +36,43 @@
 ## SilverCrest          15 Euro     Lidl
 ## THERMy blue                      Aldi
 
-
-
-
-
-
-
 package main;
+
+use strict;
+use warnings;
+
+my $version = "0.1.101";
+
+sub CometBlueBTLE_Initialize($) {
+
+    my ($hash) = @_;
+
+    $hash->{SetFn}      = "CometBlueBTLE::Set";
+    $hash->{GetFn}      = "CometBlueBTLE::Get";
+    $hash->{DefFn}      = "CometBlueBTLE::Define";
+    $hash->{NotifyFn}   = "CometBlueBTLE::Notify";
+    $hash->{UndefFn}    = "CometBlueBTLE::Undef";
+    $hash->{AttrFn}     = "CometBlueBTLE::Attr";
+    $hash->{AttrList}   = "interval ".
+                            "disable:1 ".
+                            "disabledForIntervals ".
+                            "hciDevice:hci0,hci1,hci2 ".
+                            "batteryFirmwareAge:8h,16h,24h,32h,40h,48h ".
+                            "sshHost ".
+                            "blockingCallLoglevel:2,3,4,5 ".
+                            "pin ".
+                            "model:CometBlue,SilverCrest,Sygonix,THERMyBlue ".
+                            $readingFnAttributes;
+
+
+
+    foreach my $d(sort keys %{$modules{CometBlueBTLE}{defptr}}) {
+        my $hash = $modules{CometBlueBTLE}{defptr}{$d};
+        $hash->{VERSION} 	= $version;
+    }
+}
+
+package CometBlueBTLE;
 
 my $missingModul = "";
 
@@ -50,16 +80,38 @@ use strict;
 use warnings;
 use POSIX;
 
+use GPUtils qw(GP_Import)
+  ;    # wird für den Import der FHEM Funktionen aus der fhem.pl benötigt
+  
 eval "use JSON;1" or $missingModul .= "JSON ";
 eval "use Blocking;1" or $missingModul .= "Blocking ";
 
-
-
-
-my $version = "0.1.99";
-
-
-
+## Import der FHEM Funktionen
+BEGIN {
+    GP_Import(
+        qw(readingsSingleUpdate
+          readingsBulkUpdate
+          readingsBulkUpdateIfChanged
+          readingsBeginUpdate
+          readingsEndUpdate
+          defs
+          modules
+          Log3
+          CommandAttr
+          AttrVal
+          ReadingsVal
+          ReadingsAge
+          IsDisabled
+          deviceEvents
+          init_done
+          gettimeofday
+          InternalTimer
+          RemoveInternalTimer
+          BlockingKill
+          BlockingCall
+          FmtDateTime)
+    );
+}
 
 my %gatttChar = (
         CometBlue       => {'devicename' => '0x3', 'battery' => '0x41', 'payload' => '0x3f', 'firmware' => '0x18', 'pin' => '0x47', 'date' => '0x1d',
@@ -83,76 +135,10 @@ my %CallBatteryAge = (  '8h'    => 28800,
                                 '48h'   => 172800
     );
 
+# declare prototype
+sub ExecGatttool_Run($);
 
-# Declare functions
-sub CometBlueBTLE_Initialize($);
-sub CometBlueBTLE_Define($$);
-sub CometBlueBTLE_Undef($$);
-sub CometBlueBTLE_Attr(@);
-sub CometBlueBTLE_stateRequest($);
-sub CometBlueBTLE_stateRequestTimer($);
-sub CometBlueBTLE_Set($$@);
-sub CometBlueBTLE_Get($$@);
-sub CometBlueBTLE_Notify($$);
-
-sub CometBlueBTLE_CreateParamGatttool($@);
-
-sub CometBlueBTLE_ExecGatttool_Run($);
-sub CometBlueBTLE_ExecGatttool_Done($);
-sub CometBlueBTLE_ExecGatttool_Aborted($);
-sub CometBlueBTLE_ProcessingNotification($@);
-sub CometBlueBTLE_WriteReadings($$);
-sub CometBlueBTLE_ProcessingErrors($$);
-sub CometBlueBTLE_encodeJSON($);
-
-sub CometBlueBTLE_CallBattery_IsUpdateTimeAgeTooOld($$);
-sub CometBlueBTLE_CallBattery_Timestamp($);
-sub CometBlueBTLE_CallBattery_UpdateTimeAge($);
-sub CometBlueBTLE_CreateDevicenameHEX($);
-sub CometBlueBTLE_CreatePayloadString($$$);
-sub CometBlueBTLE_ConvertPinToHexLittleEndian($);
-sub CometBlueBTLE_CmdlinePreventGrepFalsePositive($);
-
-sub CometBlueBTLE_HandlePayload($$);
-sub CometBlueBTLE_HandleBattery($$);
-sub CometBlueBTLE_HandleFirmware($$);
-sub CometBlueBTLE_HandleDevicename($$);
-sub CometBlueBTLE_HandleTempLists($@);
-
-
-
-
-
-sub CometBlueBTLE_Initialize($) {
-
-    my ($hash) = @_;
-
-    $hash->{SetFn}      = "CometBlueBTLE_Set";
-    $hash->{GetFn}      = "CometBlueBTLE_Get";
-    $hash->{DefFn}      = "CometBlueBTLE_Define";
-    $hash->{NotifyFn}   = "CometBlueBTLE_Notify";
-    $hash->{UndefFn}    = "CometBlueBTLE_Undef";
-    $hash->{AttrFn}     = "CometBlueBTLE_Attr";
-    $hash->{AttrList}   = "interval ".
-                            "disable:1 ".
-                            "disabledForIntervals ".
-                            "hciDevice:hci0,hci1,hci2 ".
-                            "batteryFirmwareAge:8h,16h,24h,32h,40h,48h ".
-                            "sshHost ".
-                            "blockingCallLoglevel:2,3,4,5 ".
-                            "pin ".
-                            "model:CometBlue,SilverCrest,Sygonix,THERMyBlue ".
-                            $readingFnAttributes;
-
-
-
-    foreach my $d(sort keys %{$modules{CometBlueBTLE}{defptr}}) {
-        my $hash = $modules{CometBlueBTLE}{defptr}{$d};
-        $hash->{VERSION} 	= $version;
-    }
-}
-
-sub CometBlueBTLE_Define($$) {
+sub Define($$) {
 
     my ( $hash, $def ) = @_;
     my @a = split( "[ \t][ \t]*", $def );
@@ -175,7 +161,7 @@ sub CometBlueBTLE_Define($$) {
         
     
     readingsSingleUpdate($hash,"state","initialized", 0);
-    $attr{$name}{room}                      = "CometBlueBTLE" if( AttrVal($name,'room','none') eq 'none' );
+    #$attr{$name}{room}                      = "CometBlueBTLE" if( AttrVal($name,'room','none') eq 'none' );
     
     Log3 $name, 3, "CometBlueBTLE ($name) - defined with BTMAC $hash->{BTMAC}";
     
@@ -183,7 +169,7 @@ sub CometBlueBTLE_Define($$) {
     return undef;
 }
 
-sub CometBlueBTLE_Undef($$) {
+sub Undef($$) {
 
     my ( $hash, $arg ) = @_;
     
@@ -199,7 +185,7 @@ sub CometBlueBTLE_Undef($$) {
     return undef;
 }
 
-sub CometBlueBTLE_Attr(@) {
+sub Attr(@) {
 
     my ( $cmd, $name, $attrName, $attrVal ) = @_;
     my $hash                                = $defs{$name};
@@ -266,7 +252,7 @@ sub CometBlueBTLE_Attr(@) {
     return undef;
 }
 
-sub CometBlueBTLE_Notify($$) {
+sub Notify($$) {
 
     my ($hash,$dev) = @_;
     my $name = $hash->{NAME};
@@ -278,7 +264,7 @@ sub CometBlueBTLE_Notify($$) {
     return if (!$events);
 
 
-    CometBlueBTLE_stateRequestTimer($hash) if( (((grep /^DEFINED.$name$/,@{$events}
+    StateRequestTimer($hash) if( (((grep /^DEFINED.$name$/,@{$events}
                                                     or grep /^INITIALIZED$/,@{$events}
                                                     or grep /^MODIFIED.$name$/,@{$events}
                                                     or grep /^DELETEATTR.$name.disable$/,@{$events}
@@ -292,7 +278,7 @@ sub CometBlueBTLE_Notify($$) {
     return;
 }
 
-sub CometBlueBTLE_stateRequest($) {
+sub StateRequest($) {
 
     my ($hash)      = @_;
     my $name        = $hash->{NAME};
@@ -305,14 +291,14 @@ sub CometBlueBTLE_stateRequest($) {
     } elsif( !IsDisabled($name) ) {
         if( ReadingsVal($name,'firmware','none') ne 'none' ) {
         
-            return CometBlueBTLE_CreateParamGatttool($hash,'read',$gatttChar{AttrVal($name,'model','')}{'battery'})
-            if( CometBlueBTLE_CallBattery_IsUpdateTimeAgeTooOld($hash,$CallBatteryAge{AttrVal($name,'BatteryFirmwareAge','24h')}) );
+            return CreateParamGatttool($hash,'read',$gatttChar{AttrVal($name,'model','')}{'battery'})
+            if( CallBattery_IsUpdateTimeAgeTooOld($hash,$CallBatteryAge{AttrVal($name,'BatteryFirmwareAge','24h')}) );
 
-            CometBlueBTLE_CreateParamGatttool($hash,'read',$gatttChar{AttrVal($name,'model','')}{'payload'}) if( $hash->{helper}{writePin} == 0 );
+            CreateParamGatttool($hash,'read',$gatttChar{AttrVal($name,'model','')}{'payload'}) if( $hash->{helper}{writePin} == 0 );
             
         } else {
 
-            CometBlueBTLE_CreateParamGatttool($hash,'read',$gatttChar{AttrVal($name,'model','')}{'firmware'});
+            CreateParamGatttool($hash,'read',$gatttChar{AttrVal($name,'model','')}{'firmware'});
         }
 
     } else {
@@ -320,7 +306,7 @@ sub CometBlueBTLE_stateRequest($) {
     }
 }
 
-sub CometBlueBTLE_stateRequestTimer($) {
+sub StateRequestTimer($) {
 
     my ($hash)      = @_;
     
@@ -328,13 +314,13 @@ sub CometBlueBTLE_stateRequestTimer($) {
 
     
     RemoveInternalTimer($hash);
-    CometBlueBTLE_stateRequest($hash) if( $init_done );
-    InternalTimer( gettimeofday()+$hash->{INTERVAL}+int(rand(60)), "CometBlueBTLE_stateRequestTimer", $hash );
+    StateRequest($hash) if( $init_done );
+    InternalTimer( gettimeofday()+$hash->{INTERVAL}+int(rand(60)), "CometBlueBTLE::StateRequestTimer", $hash );
     
     Log3 $name, 4, "CometBlueBTLE ($name) - stateRequestTimer: Call Request Timer";
 }
 
-sub CometBlueBTLE_Set($$@) {
+sub Set($$@) {
     
     my ($hash, $name, @aa)  = @_;
     my ($cmd, @args)        = @aa;
@@ -401,12 +387,12 @@ sub CometBlueBTLE_Set($$@) {
     
     return 'another process is running, try again later' if( $hash->{helper}{writePin} == 1 );
 
-    CometBlueBTLE_CreateParamGatttool($hash,'write',$handle,CometBlueBTLE_CreatePayloadString($hash,$cmd,$value));
+    CreateParamGatttool($hash,'write',$handle,CreatePayloadString($hash,$cmd,$value));
     
     return undef;
 }
 
-sub CometBlueBTLE_Get($$@) {
+sub Get($$@) {
     
     my ($hash, $name, @aa)  = @_;
     my ($cmd, @args)        = @aa;
@@ -418,7 +404,7 @@ sub CometBlueBTLE_Get($$@) {
         return 'usage: temperatures' if( @args != 0 );
         
         return 'another process is running, try again later' if( $hash->{helper}{writePin} == 1 );
-        return CometBlueBTLE_stateRequest($hash);
+        return StateRequest($hash);
         
     } elsif( $cmd eq 'firmware' ) {
         return 'usage: firmware' if( @args != 0 );
@@ -448,12 +434,12 @@ sub CometBlueBTLE_Get($$@) {
 
     return 'another process is running, try again later' if( $hash->{helper}{writePin} == 1 );
 
-    CometBlueBTLE_CreateParamGatttool($hash,'read',$handle) if( $cmd ne 'temperatures' );
+    CreateParamGatttool($hash,'read',$handle) if( $cmd ne 'temperatures' );
 
     return undef;
 }
 
-sub CometBlueBTLE_CreateParamGatttool($@) {
+sub CreateParamGatttool($@) {
 
     my ($hash,$mod,$handle,$value)  = @_;
     my $name                        = $hash->{NAME};
@@ -471,15 +457,15 @@ sub CometBlueBTLE_CreateParamGatttool($@) {
         $hash->{helper}{paramGatttool}{handle}  = $handle;
         $hash->{helper}{paramGatttool}{value}   = $value if( $mod eq 'write' );
         
-        $hash->{helper}{RUNNING_PID} = BlockingCall("CometBlueBTLE_ExecGatttool_Run", $name."|".$mac."|write|".$gatttChar{AttrVal($name,'model','')}{'pin'}."|".CometBlueBTLE_ConvertPinToHexLittleEndian(AttrVal($name,'pin','00000000')), "CometBlueBTLE_ExecGatttool_Done", 60, "CometBlueBTLE_ExecGatttool_Aborted", $hash) unless( exists($hash->{helper}{RUNNING_PID}) );
+        $hash->{helper}{RUNNING_PID} = BlockingCall("CometBlueBTLE::ExecGatttool_Run", $name."|".$mac."|write|".$gatttChar{AttrVal($name,'model','')}{'pin'}."|".ConvertPinToHexLittleEndian(AttrVal($name,'pin','00000000')), "CometBlueBTLE::ExecGatttool_Done", 60, "CometBlueBTLE::ExecGatttool_Aborted", $hash) unless( exists($hash->{helper}{RUNNING_PID}) );
         
-        readingsSingleUpdate($hash,"state","pairing thermostat with pin: " . CometBlueBTLE_ConvertPinToHexLittleEndian(AttrVal($name,'pin','00000000')),1);
+        readingsSingleUpdate($hash,"state","pairing thermostat with pin: " . ConvertPinToHexLittleEndian(AttrVal($name,'pin','00000000')),1);
     
         Log3 $name, 4, "CometBlueBTLE ($name) - Read CometBlueBTLE_ExecGatttool_Run $name|$mac|$mod|$handle";
 
     } elsif( $mod eq 'read' ) {
         Log3 $name, 4, "CometBlueBTLE ($name) - CreateParamGatttool zweites if";
-        $hash->{helper}{RUNNING_PID} = BlockingCall("CometBlueBTLE_ExecGatttool_Run", $name."|".$mac."|".$mod."|".$handle, "CometBlueBTLE_ExecGatttool_Done", 60, "CometBlueBTLE_ExecGatttool_Aborted", $hash) unless( exists($hash->{helper}{RUNNING_PID}) );
+        $hash->{helper}{RUNNING_PID} = BlockingCall("CometBlueBTLE::ExecGatttool_Run", $name."|".$mac."|".$mod."|".$handle, "CometBlueBTLE::ExecGatttool_Done", 60, "CometBlueBTLE::ExecGatttool_Aborted", $hash) unless( exists($hash->{helper}{RUNNING_PID}) );
         
         readingsSingleUpdate($hash,"state","read sensor data",1);
     
@@ -487,7 +473,7 @@ sub CometBlueBTLE_CreateParamGatttool($@) {
 
     } elsif( $mod eq 'write' ) {
         Log3 $name, 4, "CometBlueBTLE ($name) - CreateParamGatttool drittes if";
-        $hash->{helper}{RUNNING_PID} = BlockingCall("CometBlueBTLE_ExecGatttool_Run", $name."|".$mac."|".$mod."|".$handle."|".$value, "CometBlueBTLE_ExecGatttool_Done", 60, "CometBlueBTLE_ExecGatttool_Aborted", $hash) unless( exists($hash->{helper}{RUNNING_PID}) );
+        $hash->{helper}{RUNNING_PID} = BlockingCall("CometBlueBTLE::ExecGatttool_Run", $name."|".$mac."|".$mod."|".$handle."|".$value, "CometBlueBTLE::ExecGatttool_Done", 60, "CometBlueBTLE::ExecGatttool_Aborted", $hash) unless( exists($hash->{helper}{RUNNING_PID}) );
         
         readingsSingleUpdate($hash,"state","write sensor data",1);
     
@@ -495,7 +481,7 @@ sub CometBlueBTLE_CreateParamGatttool($@) {
     }
 }
 
-sub CometBlueBTLE_ExecGatttool_Run($) {
+sub ExecGatttool_Run($) {
 
     my $string      = shift;
     
@@ -521,7 +507,7 @@ sub CometBlueBTLE_ExecGatttool_Run($) {
         while($wait) {
         
             my $grepGatttool;
-            my $gatttoolCmdlineStaticEscaped = CometBlueBTLE_CmdlinePreventGrepFalsePositive("gatttool -i $hci -b $mac");
+            my $gatttoolCmdlineStaticEscaped = CmdlinePreventGrepFalsePositive("gatttool -i $hci -b $mac");
             
             $grepGatttool = qx(ps ax| grep -E \'$gatttoolCmdlineStaticEscaped\') if($sshHost eq 'none');
             $grepGatttool = qx(ssh $sshHost 'ps ax| grep -E "$gatttoolCmdlineStaticEscaped"') if($sshHost ne 'none');
@@ -564,7 +550,7 @@ sub CometBlueBTLE_ExecGatttool_Run($) {
         if( $gtResult[1] =~ /Attribute value length is invalid/ );
 
     
-        $json_notification = CometBlueBTLE_encodeJSON($gtResult[1]);
+        $json_notification = EncodeJSON($gtResult[1]);
         
         if($gtResult[0] =~ /^connect error$/) {
             return "$name|$mac|error|$gattCmd|$handle|$json_notification";
@@ -587,12 +573,12 @@ sub CometBlueBTLE_ExecGatttool_Run($) {
         }
         
     } else {
-        $json_notification = CometBlueBTLE_encodeJSON('no gatttool binary found. Please check if bluez-package is properly installed');
+        $json_notification = EncodeJSON('no gatttool binary found. Please check if bluez-package is properly installed');
         return "$name|$mac|error|$gattCmd|$handle|$json_notification";
     }
 }
 
-sub CometBlueBTLE_ExecGatttool_Done($) {
+sub ExecGatttool_Done($) {
 
     my $string      = shift;
     my ($name,$mac,$respstate,$gattCmd,$handle,$json_notification) = split("\\|", $string);
@@ -616,18 +602,18 @@ sub CometBlueBTLE_ExecGatttool_Done($) {
             readingsEndUpdate($hash,1);
         }
         
-        return CometBlueBTLE_CreateParamGatttool($hash,'read',$hash->{helper}{paramGatttool}{handle}) if( defined($hash->{tempListsHandleQueue}) and scalar(@{$hash->{tempListsHandleQueue}}) == 0 );
+        return CreateParamGatttool($hash,'read',$hash->{helper}{paramGatttool}{handle}) if( defined($hash->{tempListsHandleQueue}) and scalar(@{$hash->{tempListsHandleQueue}}) == 0 );
     }
     
     elsif( $respstate eq 'ok' and $gattCmd eq 'write' and $handle eq $gatttChar{AttrVal($name,'model','')}{'pin'} and $hash->{helper}{writePin} == 1 ) {
 
-        return CometBlueBTLE_CreateParamGatttool($hash,$hash->{helper}{paramGatttool}{mod},$hash->{helper}{paramGatttool}{handle})
+        return CreateParamGatttool($hash,$hash->{helper}{paramGatttool}{mod},$hash->{helper}{paramGatttool}{handle})
         if($handle ne $gatttChar{AttrVal($name,'model','')}{'payload'} and $hash->{helper}{paramGatttool}{mod} eq 'read');
         
-        return CometBlueBTLE_CreateParamGatttool($hash,$hash->{helper}{paramGatttool}{mod},$hash->{helper}{paramGatttool}{handle},$hash->{helper}{paramGatttool}{value})
+        return CreateParamGatttool($hash,$hash->{helper}{paramGatttool}{mod},$hash->{helper}{paramGatttool}{handle},$hash->{helper}{paramGatttool}{value})
         if($handle ne $gatttChar{AttrVal($name,'model','')}{'payload'} and $hash->{helper}{paramGatttool}{mod} eq 'write');
         
-        return CometBlueBTLE_stateRequest($hash) if($handle eq $gatttChar{AttrVal($name,'model','')}{'payload'} and $hash->{helper}{paramGatttool}{mod} eq 'read');
+        return StateRequest($hash) if($handle eq $gatttChar{AttrVal($name,'model','')}{'payload'} and $hash->{helper}{paramGatttool}{mod} eq 'read');
     }
 
     my $decode_json =   eval{decode_json($json_notification)};
@@ -637,16 +623,16 @@ sub CometBlueBTLE_ExecGatttool_Done($) {
 
     
     if( $respstate eq 'ok' ) {
-        CometBlueBTLE_ProcessingNotification($hash,$gattCmd,$handle,$decode_json->{gtResult});
+        ProcessingNotification($hash,$gattCmd,$handle,$decode_json->{gtResult});
         
     } else {
-        CometBlueBTLE_ProcessingErrors($hash,$decode_json->{gtResult});
+        ProcessingErrors($hash,$decode_json->{gtResult});
     }
     
     $hash->{helper}{writePin} = 0 if( defined($hash->{tempListsHandleQueue}) and scalar(@{$hash->{tempListsHandleQueue}}) == 0 );
 }
 
-sub CometBlueBTLE_ExecGatttool_Aborted($) {
+sub ExecGatttool_Aborted($) {
 
     my ($hash)  = @_;
     my $name    = $hash->{NAME};
@@ -656,14 +642,14 @@ sub CometBlueBTLE_ExecGatttool_Aborted($) {
     readingsSingleUpdate($hash,"state","unreachable", 1);
     
     $readings{'lastGattError'} = 'The BlockingCall Process terminated unexpectedly. Timedout';
-    CometBlueBTLE_WriteReadings($hash,\%readings);
+    WriteReadings($hash,\%readings);
 
     $hash->{helper}{writePin} = 0;
 
     Log3 $name, 3, "CometBlueBTLE ($name) - ExecGatttool_Aborted: The BlockingCall Process terminated unexpectedly. Timedout";
 }
 
-sub CometBlueBTLE_ProcessingNotification($@) {
+sub ProcessingNotification($@) {
 
     my ($hash,$gattCmd,$handle,$notification)   = @_;
     
@@ -678,25 +664,25 @@ sub CometBlueBTLE_ProcessingNotification($@) {
         ### Read Firmware and Battery Data
         Log3 $name, 5, "CometBlueBTLE ($name) - ProcessingNotification: handle $gatttChar{AttrVal($name,'model','')}{'battery'}";
         
-        $readings = CometBlueBTLE_HandleBattery($hash,$notification);
+        $readings = HandleBattery($hash,$notification);
         
     } elsif( $handle eq $gatttChar{AttrVal($name,'model','')}{'payload'} ) {
         ### payload abrufen
         Log3 $name, 5, "CometBlueBTLE ($name) - ProcessingNotification: handle $gatttChar{AttrVal($name,'model','')}{'payload'}";
         
-        $readings = CometBlueBTLE_HandlePayload($hash,$notification);
+        $readings = HandlePayload($hash,$notification);
     
     } elsif( $handle eq $gatttChar{AttrVal($name,'model','')}{'firmware'} ) {
         ### firmware abrufen
         Log3 $name, 5, "CometBlueBTLE ($name) - ProcessingNotification: handle $gatttChar{AttrVal($name,'model','')}{'firmware'}";
         
-        $readings = CometBlueBTLE_HandleFirmware($hash,$notification);
+        $readings = HandleFirmware($hash,$notification);
         
     } elsif( $handle eq $gatttChar{AttrVal($name,'model','')}{'devicename'} ) {
         ### devicename abrufen
         Log3 $name, 5, "CometBlueBTLE ($name) - ProcessingNotification: handle $gatttChar{AttrVal($name,'model','')}{'devicename'}";
         
-        $readings = CometBlueBTLE_HandleDevicename($hash,$notification);
+        $readings = HandleDevicename($hash,$notification);
     
     } elsif( defined($hash->{tempListsHandleQueue}) and scalar(@{$hash->{tempListsHandleQueue}}) > 0 ) {
         Log3 $name, 4, "CometBlueBTLE ($name) - ProcessingNotification: $notification - Noch in Queue: " . scalar(@{$hash->{tempListsHandleQueue}});
@@ -705,7 +691,7 @@ sub CometBlueBTLE_ProcessingNotification($@) {
         foreach (split(',',$gatttChar{AttrVal($name,'model','')}{'tempLists'})) {
             if( $handle eq $_ ) {
                 Log3 $name, 4, "CometBlueBTLE ($name) - ProcessingNotification in der Schleife: handle " . $_ ." und dayOfWeek: " . $i;
-                $readings = CometBlueBTLE_HandleTempLists($hash,$_,$i,$notification);
+                $readings = HandleTempLists($hash,$_,$i,$notification);
             }
             
             $i++;
@@ -713,13 +699,13 @@ sub CometBlueBTLE_ProcessingNotification($@) {
         
         $hash->{helper}{paramGatttool}{handle} = pop( @{$hash->{tempListsHandleQueue}} ) if( defined($hash->{tempListsHandleQueue}) and scalar(@{$hash->{tempListsHandleQueue}}) > 0 );
         
-        CometBlueBTLE_CreateParamGatttool($hash,'read',$hash->{helper}{paramGatttool}{handle}) if( $hash->{helper}{paramGatttool}{handle} ne 'end' );
+        CreateParamGatttool($hash,'read',$hash->{helper}{paramGatttool}{handle}) if( $hash->{helper}{paramGatttool}{handle} ne 'end' );
     }
 
-    CometBlueBTLE_WriteReadings($hash,$readings);
+    WriteReadings($hash,$readings);
 }
 
-sub CometBlueBTLE_HandleBattery($$) {
+sub HandleBattery($$) {
     ### Read Battery Data
     my ($hash,$notification)    = @_;
     
@@ -736,11 +722,11 @@ sub CometBlueBTLE_HandleBattery($$) {
     $readings{'batteryState'}        = (hex("0x".$notification) > 15 ? "ok" : "low");
 
     $hash->{helper}{CallBattery} = 1;
-    CometBlueBTLE_CallBattery_Timestamp($hash);
+    CallBattery_Timestamp($hash);
     return \%readings;
 }
 
-sub CometBlueBTLE_HandlePayload($$) {
+sub HandlePayload($$) {
     ### Read Payload Data
     my ($hash,$notification)    = @_;
     
@@ -790,7 +776,7 @@ sub CometBlueBTLE_HandlePayload($$) {
     return \%readings;
 }
 
-sub CometBlueBTLE_HandleFirmware($$) {
+sub HandleFirmware($$) {
     ### Read Firmware Data
     my ($hash,$notification)    = @_;
     
@@ -807,7 +793,7 @@ sub CometBlueBTLE_HandleFirmware($$) {
     return \%readings;
 }
 
-sub CometBlueBTLE_HandleDevicename($$) {
+sub HandleDevicename($$) {
     ### Read Devicename Data
     my ($hash,$notification)    = @_;
     
@@ -824,7 +810,7 @@ sub CometBlueBTLE_HandleDevicename($$) {
     return \%readings;
 }
 
-sub CometBlueBTLE_HandleTempLists($@) {
+sub HandleTempLists($@) {
     ### Read tempList Data
     my ($hash,$handle,$dayOfWeek,$notification) = @_;
 
@@ -872,7 +858,7 @@ sub CometBlueBTLE_HandleTempLists($@) {
     return \%readings;
 }
 
-sub CometBlueBTLE_WriteReadings($$) {
+sub WriteReadings($$) {
 
     my ($hash,$readings)    = @_;
     
@@ -891,13 +877,13 @@ sub CometBlueBTLE_WriteReadings($$) {
     readingsEndUpdate($hash,1);
 
 
-    CometBlueBTLE_stateRequest($hash) if( $hash->{helper}{CallBattery} == 1 );
+    StateRequest($hash) if( $hash->{helper}{CallBattery} == 1 );
 
     Log3 $name, 4, "CometBlueBTLE ($name) - WriteReadings: Readings were written";
 
 }
 
-sub CometBlueBTLE_ProcessingErrors($$) {
+sub ProcessingErrors($$) {
 
     my ($hash,$notification)    = @_;
     
@@ -907,27 +893,23 @@ sub CometBlueBTLE_ProcessingErrors($$) {
     Log3 $name, 4, "CometBlueBTLE ($name) - ProcessingErrors";
     $readings{'lastGattError'} = $notification;
     
-    CometBlueBTLE_WriteReadings($hash,\%readings);
+    WriteReadings($hash,\%readings);
     $hash->{helper}{writePin} = 0 if( defined($hash->{tempListsHandleQueue}) and scalar(@{$hash->{tempListsHandleQueue}}) > 0 );
 }
 
 #### my little Helper
-sub CometBlueBTLE_encodeJSON($) {
+sub EncodeJSON($) {
+    my $gtResult = shift;
 
-    my $gtResult    = shift;
-    
-    
     chomp($gtResult);
-    
-    my %response = (
-        'gtResult'      => $gtResult
-    );
-    
-    return encode_json \%response;
+
+    my %response = ( 'gtResult' => $gtResult );
+
+    return encode_json( \%response );
 }
 
 ## Routinen damit Firmware und Batterie nur alle X male statt immer aufgerufen wird
-sub CometBlueBTLE_CallBattery_Timestamp($) {
+sub CallBattery_Timestamp($) {
 
     my $hash    = shift;
     
@@ -937,7 +919,7 @@ sub CometBlueBTLE_CallBattery_Timestamp($) {
     $hash->{helper}{updateTimestampCallBattery} = FmtDateTime(gettimeofday());
 }
 
-sub CometBlueBTLE_CallBattery_UpdateTimeAge($) {
+sub CallBattery_UpdateTimeAge($) {
 
     my $hash    = shift;
 
@@ -948,15 +930,15 @@ sub CometBlueBTLE_CallBattery_UpdateTimeAge($) {
     return $UpdateTimeAge;
 }
 
-sub CometBlueBTLE_CallBattery_IsUpdateTimeAgeTooOld($$) {
+sub CallBattery_IsUpdateTimeAgeTooOld($$) {
 
     my ($hash,$maxAge)    = @_;;
     
     
-    return (CometBlueBTLE_CallBattery_UpdateTimeAge($hash)>$maxAge ? 1:0);
+    return (CallBattery_UpdateTimeAge($hash)>$maxAge ? 1:0);
 }
 
-sub CometBlueBTLE_CreateDevicenameHEX($) {
+sub CreateDevicenameHEX($) {
 
     my $devicename      = shift;
     
@@ -966,7 +948,7 @@ sub CometBlueBTLE_CreateDevicenameHEX($) {
     return $devicenameHex;
 }
 
-sub CometBlueBTLE_ConvertPinToHexLittleEndian($) {
+sub ConvertPinToHexLittleEndian($) {
 
     my $pin     = shift;
     
@@ -978,7 +960,7 @@ sub CometBlueBTLE_ConvertPinToHexLittleEndian($) {
     return $hex;
 }
 
-sub CometBlueBTLE_CreatePayloadString($$$) {
+sub CreatePayloadString($$$) {
 
     my ($hash,$setCmd,$value)   = @_;
     my $name                    = $hash->{NAME};
@@ -1003,7 +985,7 @@ sub CometBlueBTLE_CreatePayloadString($$$) {
 
 }
 
-sub CometBlueBTLE_CmdlinePreventGrepFalsePositive($) {
+sub CmdlinePreventGrepFalsePositive($) {
 # https://stackoverflow.com/questions/9375711/more-elegant-ps-aux-grep-v-grep
 # Given abysmal (since external-command-based) performance in the first place, we'd better
 # avoid an *additional* grep process plus pipe...
