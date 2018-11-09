@@ -45,7 +45,7 @@ package main;
 use strict;
 use warnings;
 
-my $version = "0.2.0";
+my $version = "0.2.1";
 
 sub CometBlueBTLE_Initialize($) {
 
@@ -199,8 +199,7 @@ sub Define($$) {
     $hash->{tempListsHandleQueue} = [];
 
     readingsSingleUpdate( $hash, "state", "initialized", 0 );
-
-#$attr{$name}{room}                      = "CometBlueBTLE" if( AttrVal($name,'room','none') eq 'none' );
+    CommandAttr(undef,$name . ' room CometBlueBTLE') if ( AttrVal($name,'room','none') eq 'none' );
 
     Log3 $name, 3, "CometBlueBTLE ($name) - defined with BTMAC $hash->{BTMAC}";
 
