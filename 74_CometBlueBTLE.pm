@@ -199,7 +199,8 @@ sub Define($$) {
     $hash->{tempListsHandleQueue} = [];
 
     readingsSingleUpdate( $hash, "state", "initialized", 0 );
-    CommandAttr(undef,$name . ' room CometBlueBTLE') if ( AttrVal($name,'room','none') eq 'none' );
+    CommandAttr( undef, $name . ' room CometBlueBTLE' )
+      if ( AttrVal( $name, 'room', 'none' ) eq 'none' );
 
     Log3 $name, 3, "CometBlueBTLE ($name) - defined with BTMAC $hash->{BTMAC}";
 
