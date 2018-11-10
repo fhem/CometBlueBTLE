@@ -45,7 +45,7 @@ package main;
 use strict;
 use warnings;
 
-my $version = "0.2.1";
+my $version = "0.2.2";
 
 sub CometBlueBTLE_Initialize($) {
 
@@ -120,6 +120,7 @@ my %gatttChar = (
         'devicename' => '0x3',
         'battery'    => '0x41',
         'payload'    => '0x3f',
+#         'payload2'   => '0x3d',
         'firmware'   => '0x18',
         'pin'        => '0x47',
         'date'       => '0x1d',
@@ -173,7 +174,7 @@ my %CallBatteryAge = (
 );
 
 # declare prototype
-sub ExecGatttool_Run($);
+#sub ExecGatttool_Run($);
 
 sub Define($$) {
 
@@ -191,7 +192,7 @@ sub Define($$) {
 
     $hash->{BTMAC}                = $mac;
     $hash->{VERSION}              = $version;
-    $hash->{INTERVAL}             = 150;
+    $hash->{INTERVAL}             = 300;
     $hash->{helper}{writePin}     = 0;
     $hash->{helper}{CallBattery}  = 0;
     $hash->{NOTIFYDEV}            = "global,$name";
@@ -415,7 +416,7 @@ sub Set($$@) {
     if ( $cmd eq 'desired-temp' or $cmd eq 'controlManu' ) {
         return
 'CometBlueBTLE: desired-temp requires <temperature> in degrees celsius as additional parameter'
-          if ( @args < 1 );
+          if ( @args != 1 );
 
 #return 'CometBlueBTLE: desired-temp supports temperatures from 6.0 - 28.0 degrees' if($args[0]<8.0 or $args[0]>28.0 or $args[0] ne 'on' or $args[0] ne 'off');
 
@@ -426,7 +427,7 @@ sub Set($$@) {
     elsif ( $cmd eq 'tempEco' ) {
         return
 'CometBlueBTLE: tempEco requires <temperature> in degrees celsius as additional parameter'
-          if ( @args < 1 );
+          if ( @args != 1 );
         return
 'CometBlueBTLE: tempEco supports temperatures from 6.0 to 28.0 degrees'
           if ( $args[0] < 12.0 or $args[0] > 23.0 );
@@ -438,7 +439,7 @@ sub Set($$@) {
     elsif ( $cmd eq 'tempComfort' ) {
         return
 'CometBlueBTLE: tempComfort requires <temperature> in degrees celsius as additional parameter'
-          if ( @args < 1 );
+          if ( @args != 1 );
         return
 'CometBlueBTLE: tempComfort supports temperatures from 6.0 to 28.0 degrees'
           if ( $args[0] < 12.0 or $args[0] > 23.0 );
@@ -449,7 +450,7 @@ sub Set($$@) {
     }
     elsif ( $cmd eq 'tempOffset' ) {
         return 'CometBlueBTLE: tempOffset requires an additional parameter'
-          if ( @args < 1 );
+          if ( @args != 1 );
         return 'CometBlueBTLE: tempOffset supports values from -5.0 to 5.0'
           if ( $args[0] < -5.0 or $args[0] > 5.0 );
 
@@ -460,10 +461,7 @@ sub Set($$@) {
     elsif ( $cmd eq 'winOpnSensitivity' ) {
         return
 'CometBlueBTLE: winOpnSensitivity requires an additional parameter high, medium or low'
-          if ( @args < 1
-            or $args[0] ne 'high'
-            or $args[0] ne 'medium'
-            or $args[0] ne 'low' );
+          if ( @args != 1 );
 
         $handle = $gatttChar{ AttrVal( $name, 'model', '' ) }{'payload'};
         $value = join( " ", @args );
@@ -472,7 +470,7 @@ sub Set($$@) {
     elsif ( $cmd eq 'winOpnPeriod' ) {
         return
 'CometBlueBTLE: winOpnSensitivity requires an additional parameter in minutes'
-          if ( @args < 1 );
+          if ( @args != 1 );
 
         $handle = $gatttChar{ AttrVal( $name, 'model', '' ) }{'payload'};
         $value = join( " ", @args );
@@ -495,7 +493,7 @@ sub Set($$@) {
         $list .=
 " tempComfort:12.0,12.5,13.0,13.5,14.0,14.5,15.0,15.5,16.0,16.5,17.0,17.5,18.0,18.5,19.0,19.5,20.0,20.5,21.0,21.5,22.0,22.5,23.0";
         $list .=
-" tempOffset:-5,-4.5,-4,-3.5,-3,-2.5,-2,-1.5,-1,-0.5,0,0.5,1,1.5,2,2.5,3,3.5,4,4.5,5 winOpnSensitivity:high,medium,low winOpnPeriod:slider,5,5,30";
+" tempOffset:-5,-4.5,-4,-3.5,-3,-2.5,-2,-1.5,-1,-0.5,0,0.5,1,1.5,2,2.5,3,3.5,4,4.5,5 winOpnSensitivity:high,medium,low winOpnPeriod:slider,5,5,30 resetBatteryTimestamp:noArg";
 
         return "Unknown argument $cmd, choose one of $list";
     }
@@ -524,6 +522,15 @@ sub Get($$@) {
         return StateRequest($hash);
 
     }
+#     elsif ( $cmd eq 'temperatures2' ) {
+#         return 'usage: temperatures2' if ( @args != 0 );
+# 
+#         return 'another process is running, try again later'
+#           if ( $hash->{helper}{writePin} == 1 );
+#         return CreateParamGatttool( $hash, 'read',
+#                 $gatttChar{ AttrVal( $name, 'model', '' ) }{'payload2'} )
+#     
+#     }
     elsif ( $cmd eq 'firmware' ) {
         return 'usage: firmware' if ( @args != 0 );
 
@@ -1376,24 +1383,96 @@ sub CmdlinePreventGrepFalsePositive($) {
 1;
 
 =pod
+
 =item device
-=item summary       
-=item summary_DE    
+=item summary
+=item summary_DE    CometBlueBTLE ist ein Modul zum Steuern diverser BTLE Thermostate
 
 =begin html
 
-<a name=""></a>
-<h3></h3>
-
-
 =end html
-
 =begin html_DE
 
-<a name=""></a>
-<h3></h3>
-
+<a name="CometBlueBTLE"></a>
+<h3>CometBlueBTLE - BTLE Thermostate</h3>
+<ul>
+    Das Modul steuert diverse BTLE Thermostate. Unterstützt werden derzeit Xavax Hama,Sygonix HT100 BT,Comet Blue,SilverCrest und THERMy blue.
+    <br><br>
+    <a name="CometBlueBTLEdefine"></a>
+    <b>Define</b>
+    <ul><br>
+        <code>define &lt;name&gt; CometBlueBTLE &lt;BT-MAC&gt;</code>
+    <br><br>
+    Example:
+    <ul><br>
+        <code>define HeizungsThermostatKueche CometBlueBTLE C4:7C:8D:62:42:6F</code><br>
+    </ul>
+    <br>
+    Der Befehl legt ein Device vom Typ CometBlueBTLE mit dem Namen HeizungsThermostatKueche und der Bluetooth MAC C4:7C:8D:62:42:6F an.<br />
+    Nach dem Anlegen des Device und setzen des korrekten model Attributes werden umgehend und automatisch die aktuellen Daten vom betroffenen Thermostat gelesen.
+    </ul>
+    <br><br>
+    <a name="CometBlueBTLEreadings"></a>
+    <b>Readings</b>
+    <ul>
+        <li>0_tempListSat - Schaltzeiten f&uuml;r Samstag im automatik Betrieb, 8 Schaltzeiten je 4 f&uuml;r Start und Ende</li>
+        <li>1_tempListSun - Schaltzeiten f&uuml;r Sonntag im automatik Betrieb, 8 Schaltzeiten je 4 f&uuml;r Start und Ende</li>
+        <li>2_tempListMon - Schaltzeiten f&uuml;r Montag im automatik Betrieb, 8 Schaltzeiten je 4 f&uuml;r Start und Ende</li>
+        <li>3_tempListTue - Schaltzeiten f&uuml;r Dienstag im automatik Betrieb, 8 Schaltzeiten je 4 f&uuml;r Start und Ende</li>
+        <li>4_tempListWed - Schaltzeiten f&uuml;r Mittwoch im automatik Betrieb, 8 Schaltzeiten je 4 f&uuml;r Start und Ende</li>
+        <li>5_tempListThu - Schaltzeiten f&uuml;r Donnerstag im automatik Betrieb, 8 Schaltzeiten je 4 f&uuml;r Start und Ende</li>
+        <li>6_tempListFri - Schaltzeiten f&uuml;r Freitag im automatik Betrieb, 8 Schaltzeiten je 4 f&uuml;r Start und Ende</li>
+        <li>batteryPercent - aktueller Ladewert der Batterie in Prozent</li>
+        <li>batteryState - ok/low aktueller Status der Batterie, unter 16 Prozent low</li>
+        <li>desired-temp - Wunschtemperatur welche erreicht werden soll</li>
+        <li>devicename - Name des Thermostaten</li>
+        <li>firmware - Firmwareversion</li>
+        <li>lastChangeBy - wer hat den letzten Status ge&auml;dert, FHEM oder das Thermostat (manuell am Thermostat)</li>
+        <li>lastGattError - Fehlermeldung vom gatttool wenn ein Fehler auf trat</li>
+        <li>measured-temp - am Thermostat gemessene Temperatur</li>
+        <li>state - Status des Thermostat</li>
+        <li>tempComfort - eingestellte Komforttemperatur (Tag)</li>
+        <li>tempEco - eingestellt Spartemperatur (Nacht)</li>
+        <li>tempOffset - Offset zur Temperaturmessung, gemessende Temperatur minus das Offset ergibt measured-temp</li>
+        <li>winOpnPeriod - wie lange soll die desired-temp gesenkt werden wenn Fenster offen erkannt wurde</li>
+        <li>winOpnSensitivity - wie sensibel soll Fenster offen erkannt werden</li>
+    </ul>
+    <br>
+    <a name="CometBlueBTLEset"></a>
+    <b>get</b>
+    <ul>
+        <li>desired-temp - setzen der Wunschtemperatur</li>
+        <li>tempComfort - einstellen der Komforttemperatur (Tag)</li>
+        <li>controlManu - einstellen der Temperatur im manuellen Modus</li>
+        <li>tempEco - einstellen der Spartemperatur (Nacht)</li>
+        <li>tempOffset - einstellen des Offset Wertes von der gemessenen Temperatur</li>
+        <li>winOpnSensitivity - wie sennsibel soll der Fenster offen Status erkannt werden</li>
+        <li>winOpnPeriod - wie lange soll der Fenster offen Status und somit die gesenkte Temperatur gelten</li>
+    </ul>
+    <br>
+    <a name="CometBlueBTLEget"></a>
+    <b>get</b>
+    <ul>
+        <li>devicename - Devicename lesen</li>
+        <li>firmware - Firmware version lesen</li>
+        <li>tempList - Temperaturlisten lesen</li>
+        <li>temperatures - eingestellte desired-temp und measured-temp lesen</li>
+    </ul>
+    <br>
+    <a name="CometBlueBTLEattribute"></a>
+    <b>Attribute</b>
+    <ul>
+        <li>interval - &auml;ndert das Abrufinterval</li>
+        <li>disable - deaktiviert das Device</li>
+        <li>disabledForIntervals - deaktiviert das Device f&uuml;r den entsprechenden Zeitraum</li>
+        <li>hciDevice - gibt das HCI Device an über das die BTLE Verbindung stattfinden soll</li>
+        <li>batteryFirmwareAge - max alter für den Batteriestatus bevor wieder abgerufen werden soll</li>
+        <li>sshHost - IP / FQDN zum SSH Zieldevice</li>
+        <li>blockingCallLoglevel - loglevel für BlockingCall</li>
+        <li>pin - PIN des Thermostats zum abrufen der Daten</li>
+        <li>model - Thermostatmodel</li>
+    </ul>
+</ul>
 
 =end html_DE
-
 =cut
